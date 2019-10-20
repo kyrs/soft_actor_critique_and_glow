@@ -58,7 +58,7 @@ class Policy(object):
 		if dropout:
 			meanApprox.add(tf.keras.Dropout(drop_ratio))
 
-		meanApprox.add(tf.keras.layers.ReLU())
+		#meanApprox.add(tf.keras.layers.ReLU())
 
 	meanModelOut = meanApprox(input_layer)
 
@@ -75,7 +75,7 @@ class Policy(object):
 		if dropout:
 			varApprox.add(tf.keras.Dropout(drop_ratio))
 
-		varApprox.add(tf.keras.layers.RelU())
+		#varApprox.add(tf.keras.layers.RelU())
 
 	varModelOut = varApprox(inputLayer)
 	## defining the output model of the mean vector
@@ -84,7 +84,10 @@ class Policy(object):
 
 	return (meanModel,varModel)
 
+	def PolicyApprox(self):
+		## function to approximate the policy for the network
 
+		for 
 
 	def samplePolicy(self,modelDict={},inputDict={}):
 	"""
@@ -110,7 +113,7 @@ class Policy(object):
 		
 		return outputDict
 
-	def trainNet(self,loss):
+	def policyLearn(self):
 		## function for training the models 
 		pass
 
@@ -120,9 +123,7 @@ class QValFn(object):
 	## function for approximating the Q-value for a given state and action
 	def __init__(self):
 
-		self.modelDict = {name:self.fnApprox(layer_specific_param=[(shape[2],1)],input_shape=shape) 
-							for name,shape in eps_name_size}
-		pass
+		self.finalModel = self.QvalueApprox()
 
 	def fnApprox(self,layer_specific_param=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5,denseLayer=512):
 		##  function approximator, returning a concatenated output for given state and action processed file
@@ -197,19 +198,136 @@ class QValFn(object):
 						for name in ordLayProcs]
 
 		concatOut = []
-		for model,outTensor in zip(ordLayProcs,inputList):
+		for model,outTensor in zip(modelList,inputList):
 			state,action = outTensor
 			output = model([state,action])
 			concatOut.append(output)
 
 		concatOut = tf.keras.layers.Concatenate()(concatOut)
 		
+		loopInput = concatOut
+		for i,layerInfo in enumerate(denseLayerInfo):
+			## extracting the features from the neural network
 
+			if i !=len(denseLayerInfo)-1:
+				loopInput = tf.keras.layers.Dense(layerInfo)(loopInput)
+				loopInput = tf.keras.layers.ReLU()(loopInput)
+			else:
+				assert(layerInfo==1)
+				loopInput = tf.keras.layers.Dense(layerInfo)(loopInput)
 
+		output = loopInput
+		finalModel  = tf.keras.model(inputs=inputList,outputs=output)
+		return finalModel
 
+	def QvalForward(self,inpStateAct):
+		## approximating the value of Q value function.
+		"""
+		inpStateAct : dictionary with state, action 
 
+		------result--------
+		Q- value for a given state action pair
+		"""
+		modelInp = []
+		for i,name in enumerate(ordLayProcs):
+			modelInp.append(inpStateAct[name]["state"])
+			modelInp.append(inpStateAct[name]["action"])
+
+		return self.finalModel(modelInp)
+
+	def QvalLearn(self):
+		pass
 
 
 # ---------------------------defining the value function --------------------------------
 class ValFn(object):
-	pass
+	self.finalModel = self.valFnApprox()
+
+	def fnApprox(self,layer_specific_param=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5,denseLayer=512):
+		##  function approximator, returning a concatenated output for given state 
+		"""
+		layer_specif_param : tuple of output dim and weight dim in the function approximator 
+		input_shape : shape of the layers 
+		
+		-----Return-------
+		model which take input state and action and return a dense layer output 
+
+		"""
+
+
+		state = tf.keras.layers.Input(shape=input_shape)
+
+		initializer = tf.random_normal_initializer(0.,0.02)
+
+		stateModel = tf.keras.Sequential()
+		## model processing the state
+		for output_shape,kernel_size  in layer_specific_param:
+			stateModel.add(tf.keras.layers.Conv2D(output_shape, kernel_size, padding='same',
+							 kernel_initializer=initializer))
+			if batch_norm:
+				stateModel.add(tf.keras.layers.BatchNormalization())
+			if dropout:
+				stateModel.add(tf.keras.Dropout(drop_ratio))
+			stateModel.add(tf.keras.layers.ReLU())
+
+		## doing flattening
+		stateModel.add(tf.keras.layers.Flatten())
+		stateModel.add(tf.keras.layers.Dense(denseLayer))
+
+		stateModelOut = stateModel(state)
+
+		fnApprox = tf.keras.Model(inputs=state,outputs=output)
+		return fnApprox
+
+	def valFnApprox(self,denseLayerInfo=[512,1]):
+		## creating final Qvalue model which concatenate all the individual output and return a single QValue 
+
+		"""
+		denseLayerInfo : information about the dense layer
+
+		--return--
+		"""
+		modelList = [self.fnApprox(layer_specific_param=[(shape[2],1)],input_shape= eps_name_size[name]) 
+							for name in ordLayProcs]
+		inputList= [(tf.keras.layers.Input(shape=eps_name_size[name])) 
+						for name in ordLayProcs]
+
+		concatOut = []
+		for model,outTensor in zip(modelList,inputList):
+			state = outTensor
+			output = model([state])
+			concatOut.append(output)
+
+		concatOut = tf.keras.layers.Concatenate()(concatOut)
+		
+		loopInput = concatOut
+		for i,layerInfo in enumerate(denseLayerInfo):
+			## extracting the features from the neural network
+
+			if i !=len(denseLayerInfo)-1:
+				loopInput = tf.keras.layers.Dense(layerInfo)(loopInput)
+				loopInput = tf.keras.layers.ReLU()(loopInput)
+			else:
+				assert(layerInfo==1)
+				loopInput = tf.keras.layers.Dense(layerInfo)(loopInput)
+
+		output = loopInput
+		finalModel  = tf.keras.model(inputs=inputList,outputs=output)
+		return finalModel
+
+	def ValFnForward(self,inpStateAct):
+		## approximating the value of value function.
+		"""
+		inpStateAct : dictionary with state, action 
+
+		------result--------
+		Q- value for a given state action pair
+		"""
+		modelInp = []
+		for i,name in enumerate(ordLayProcs):
+			modelInp.append(inpStateAct[name]["state"])
+
+		return self.finalModel(modelInp)
+
+	def ValFnLearn(self):
+		pass
