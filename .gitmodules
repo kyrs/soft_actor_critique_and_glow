@@ -1,0 +1,8 @@
+[submodule "src/glow"]
+	path = src/glow
+	url = https://github.com/kyrs/glow.git
+	branch = rl_based
+[submodule "src/facenet"]
+	path = src/facenet
+	url = https://github.com/kyrs/facenet.git
+	branch = rl_based
