@@ -8,6 +8,8 @@ written in Tf2.0
 """
 
 import tensorflow as tf
+import tensorflow_probability as tfp
+tfd = tfp.distributions
 
 eps_name_size = {"enc_eps_0":(128, 128, 6),"enc_eps_1":(64, 64, 12),
 							"enc_eps_2":( 32, 32, 24),
@@ -16,6 +18,16 @@ eps_name_size = {"enc_eps_0":(128, 128, 6),"enc_eps_1":(64, 64, 12),
 							"enc_eps_5": ( 4, 4, 384)}
 
 ordLayProcs = ["enc_eps_0","enc_eps_1","enc_eps_2","enc_eps_3","enc_eps_4","enc_eps_5"]
+
+"""
+dictFormat = {
+	"state"  :
+	"action" :
+	"next state" :
+	"done" : 
+}
+"""
+
 
 #---------------defining the POlicy -------------------------
 class Policy(object):
@@ -29,65 +41,123 @@ class Policy(object):
 							# "enc_eps_5": ( 4, 4, 384)}
 
 		## creating a list of model based on the input data
-		self.modelDict = {name:self.fnApprox(layer_specific_mean=[(shape[2],1)],layer_specific_var=[(shape[2],1)],input_shape=shape) 
-							for name,shape in eps_name_size}
+		# self.modelDict = {name:self.fnApprox(layer_specific_mean=[(shape[2],1)],layer_specific_var=[(shape[2],1)],input_shape=shape) 
+		# 					for name,shape in eps_name_size}
 
 
 	def fnApprox(self,layer_specific_mean=[],layer_specific_var=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5 ):
 	"""
-	layer_specific_mean : list of tuple with (output layer specifics and kernel shapes)
-	layer_specific_var  : list of tuple with (output layer specifics and kernel shapes)
-	input_shape : [rows,col,channel] specifics of the input matrix
+		layer_specific_mean : list of tuple with (output layer specifics and kernel shapes)
+		layer_specific_var  : list of tuple with (output layer specifics and kernel shapes)
+		input_shape : [rows,col,channel] specifics of the input matrix
 
-	----Return----
-	return the function approximator of the mean and variance  
-	"""
-	inputLayer = tf.keras.layers.Input(shape=input_shape)
-	initializer = tf.random_normal_initializer(0.,0.02)
+		----Return----
+		return the function approximator of the mean and variance  
+		"""
+		inputLayer = tf.keras.layers.Input(shape=input_shape)
+		initializer = tf.random_normal_initializer(0.,0.02)
 
-	meanApprox = tf.keras.Sequential()
+		meanApprox = tf.keras.Sequential()
 
-	## creating the function for the mean approximation
-	for output_shape,kernel_size  in layer_specific_mean:
-		meanApprox.add(tf.keras.layers.Conv2D(output_shape, kernel_size, padding='same',
-							 kernel_initializer=initializer))
+		## creating the function for the mean approximation
+		for output_shape,kernel_size  in layer_specific_mean:
+			meanApprox.add(tf.keras.layers.Conv2D(output_shape, kernel_size, padding='same',
+								 kernel_initializer=initializer))
 
-		if batch_norm:
-			meanApprox.add(tf.keras.layers.BatchNormalization())
+			if batch_norm:
+				meanApprox.add(tf.keras.layers.BatchNormalization())
 
-		if dropout:
-			meanApprox.add(tf.keras.Dropout(drop_ratio))
+			if dropout:
+				meanApprox.add(tf.keras.Dropout(drop_ratio))
 
-		#meanApprox.add(tf.keras.layers.ReLU())
+			#meanApprox.add(tf.keras.layers.ReLU())
 
-	meanModelOut = meanApprox(input_layer)
+		meanModelOut = meanApprox(input_layer)
 
-	## creating the function for the variance calculation 
-	varApprox = tf.keras.Sequential()
+		## creating the function for the variance calculation 
+		varApprox = tf.keras.Sequential()
 
-	for var_shape,var_kernel_size  in layer_specific_var:
-		varApprox.add(tf.keras.layers.Conv2D(var_shape,var_kernel_size,padding="same",
-							kernel_initializer=initializer))
+		for var_shape,var_kernel_size  in layer_specific_var:
+			varApprox.add(tf.keras.layers.Conv2D(var_shape,var_kernel_size,padding="same",
+								kernel_initializer=initializer))
 
-		if batch_norm:
-			varApprox.add(tf.keras.layers.BatchNormalization())
+			if batch_norm:
+				varApprox.add(tf.keras.layers.BatchNormalization())
 
-		if dropout:
-			varApprox.add(tf.keras.Dropout(drop_ratio))
+			if dropout:
+				varApprox.add(tf.keras.Dropout(drop_ratio))
 
-		#varApprox.add(tf.keras.layers.RelU())
+			#varApprox.add(tf.keras.layers.RelU())
 
-	varModelOut = varApprox(inputLayer)
-	## defining the output model of the mean vector
-	meanModel = tf.keras.Model(inputs=inputLayer,outputs=meanModelOut)
-	varModel  = tf.keras.Model(inputs=inputLayer,outputs=varModelOut)
+		varModelOut = varApprox(inputLayer)
+		## defining the output model of the mean vector
+		meanModel = tf.keras.Model(inputs=inputLayer,outputs=meanModelOut)
+		varModel  = tf.keras.Model(inputs=inputLayer,outputs=varModelOut)
 
-	return (meanModel,varModel)
+		return (meanModel,varModel)
 
 	def PolicyApprox(self):
 		## function to approximate the policy for the network
+		modelList = [self.fnApprox(layer_specific_mean=[(eps_name_size[name][2],1)],layer_specific_var=[(eps_name_size[name][2],1)],
+							input_shape=eps_name_size[name])
+							for name in ordLayProcs]
 
-		for 
+		## entropy calculation 
+		# entropyList = [self.entropyCalc(inputShape=eps_name_size[name]) for name in ordLayProcs]
+		
+		# state list based prediction
+		inputList= [tf.keras.layers.Input(shape=eps_name_size[name]) 
+						for name in ordLayProcs]
+
+		## list of the output (action for each individual element)
+		actionList = []
+
+		outputList = []
+		logProbVal = 0
+		for model,inputState in zip(modelList,inputList):
+			mean,var = model
+			meanOut  = mean(inputState)
+			varOut   = var(inputState)
+			# newVal = tf.random.normal(meanOut.shape,mean=meanOut,stdDev =tf.sqrt(tf.exp(varOut))) ## re-parametization trick
+			newValDist = tfd.normal(loc =meanOut,scale=tf.sqrt(tf.exp(varOut)))
+
+			action = newValDist.sample()
+			prob = newValDist.prob(action)
+			logProbVal+=tf.math.log(prob)
+			actionList.append(action)			
+		# 	outputList.append(entropyModel(newVal))
+
+		# ## concatenate all the output and then putting a sigmoid as an output
+		# concatOut = tf.keras.layers.Concatenate()(outputList)
+		# logit = tf.keras.Dense(1)(concatOut)
+		# prob = tf.keras.layers.sigmoid()(logit)
+		# logProb = tf.math.log(prob)
+
+
+		outputList  = [logProbVal]+actionList ## appending the list of all output tensor
+		finalModel  = tf.keras.model(inputs=inputList,outputs=outputList)
+		return finalModel
+		
+
+	def entropyCalc(self,layerInfo=[512],inputShape=[]):
+		## creating model to calculate entropy from the input action 
+		"""
+		layerInfo : it is a list of the hidden layer network
+		
+		----return----
+		model which takes an input and  flatten it 
+		"""
+		inputLayer = tf.keras.layers.Input(shape=inputShape)
+		model = tf.keras.Sequential()
+
+		model.add(tf.keras.flatten())
+		## enumerating the list of the hiden 
+		for i,hiddenLayer in enumerate(layerInfo):
+
+			model.add(tf.keras.layers.Dense(hiddenLayer))
+			model.add(tf.keras.layers.ReLU())
+
+		return model
 
 	def samplePolicy(self,modelDict={},inputDict={}):
 	"""
