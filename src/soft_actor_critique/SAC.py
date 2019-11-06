@@ -59,6 +59,13 @@ class SAC:
 		## define loss function for Q value 
 		pass
 
-	def vValLoss(self):
+	def vValLoss(self,currentState,action):
 		## define loss function for value function
-		pass
+
+		value = self.ValueFn.ValFnForward(currentState)
+		policy = self.policy.samplePolicy(currentState)
+		qVal =  self.QSample.QvalForward(currentState,action) 
+		logPolicy = .....
+		softValue = tf.reduce_sum(qVal-logPolicy)
+		
+		return tf.reduce_sum(0.5*tf.pow((value-softValue),2))
