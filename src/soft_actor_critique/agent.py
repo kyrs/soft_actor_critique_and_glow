@@ -180,9 +180,23 @@ class Policy(object):
 			outputDict[layerName]["new_state"] = layerValue+newVal
 			outputDict[layerName]["action"] = newVal
 			outputDict[layerName]["old_state"] = layerValue
+			outputDict[layerName]["mean"] = meanMat
+			outputDict[layerName]["varLog"] = varLog
+
 		
 		return outputDict
 
+	def lgOfPolicy(self,policyParam,actionParameter):
+		## calculating the log of the policy for given parameter
+		logVal = 0 
+		for i,name in enumerate(ordLayProcs):
+			mean = inpStateAct[name]["mean"]
+			varLog = inpStateAct[name]["varLog"]
+			action = actionParameter[name]["action"]
+			val = tfp.LogNormal(loc=mean,scale = tf.sqrt(tf.exp(varLog))).log_prob(action)
+			logVal+=val
+			
+		return logVal
 	def policyLearn(self):
 		## function for training the models 
 		pass
