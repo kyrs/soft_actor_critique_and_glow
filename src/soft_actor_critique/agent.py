@@ -168,8 +168,12 @@ class Policy(object):
 	return next state, and action resulting it
 
 	"""
-		outputDict = {}
-
+	## TODO : USE FINAL MODEL BASED METHOD
+		action = {}
+		state  = {}
+		newState = {}
+		mean = {}
+		varLog = {}
 		for layerName,layerValue in inputDict.items():
 			meanModel,varModel = modelDict[layerName]
 
@@ -177,25 +181,25 @@ class Policy(object):
 			varLog  = varModel(value, Training=False)
 
 			newVal = tf.random.normal(meanMat.shape,mean=meanMat,stdDev =tf.sqrt(tf.exp(varLog)))
-			outputDict[layerName]["new_state"] = layerValue+newVal
+			newState[layerName]["state"] = layerValue+newVal
 			outputDict[layerName]["action"] = newVal
-			outputDict[layerName]["old_state"] = layerValue
-			outputDict[layerName]["mean"] = meanMat
-			outputDict[layerName]["varLog"] = varLog
+			state[layerName]["state"] = layerValue
+			mean[layerName]["mean"] = meanMat
+			varLog[layerName]["varLog"] = varLog
 
 		
-		return outputDict
+		return (newState,state,action,mean,varLog)
 
-	def lgOfPolicy(self,policyParam,actionParameter):
+	def lgOfPolicy(self,mean,varLog,action):
 		## calculating the log of the policy for given parameter
 		logVal = 0 
 		for i,name in enumerate(ordLayProcs):
-			mean = inpStateAct[name]["mean"]
-			varLog = inpStateAct[name]["varLog"]
-			action = actionParameter[name]["action"]
+			mean = mean[name]["mean"]
+			varLog = varLog[name]["varLog"]
+			action = action[name]["action"]
 			val = tfp.LogNormal(loc=mean,scale = tf.sqrt(tf.exp(varLog))).log_prob(action)
 			logVal+=val
-			
+
 		return logVal
 	def policyLearn(self):
 		## function for training the models 
@@ -304,7 +308,7 @@ class QValFn(object):
 		finalModel  = tf.keras.model(inputs=inputList,outputs=output)
 		return finalModel
 
-	def QvalForward(self,inpStateAct):
+	def QvalForward(self,state,action):
 		## approximating the value of Q value function.
 		"""
 		inpStateAct : dictionary with state, action 
@@ -314,8 +318,8 @@ class QValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(inpStateAct[name]["state"])
-			modelInp.append(inpStateAct[name]["action"])
+			modelInp.append(state[name]["state"])
+			modelInp.append(action[name]["action"])
 
 		return self.finalModel(modelInp)
 
@@ -399,7 +403,7 @@ class ValFn(object):
 		finalModel  = tf.keras.model(inputs=inputList,outputs=output)
 		return finalModel
 
-	def ValFnForward(self,inpStateAct):
+	def ValFnForward(self,state):
 		## approximating the value of value function.
 		"""
 		inpStateAct : dictionary with state, action 
@@ -409,7 +413,7 @@ class ValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(inpStateAct[name]["state"])
+			modelInp.append(state[name]["state"])
 
 		return self.finalModel(modelInp)
 

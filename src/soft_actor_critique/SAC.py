@@ -8,10 +8,10 @@ from agent import Policy,QValFn,ValFn
 import os 
 import tensorflow as tf 
 import tensorflow_probability as tfp
-
+import copy
 
 class SAC:
-	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,loss,modelName,logDir,lr):
+	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,loss,modelName,logDir,lr, TAU):
 		
 		self.epoch = epoch
 		self.gamma = gamma
@@ -24,7 +24,8 @@ class SAC:
 		self.sumDir = os.path.join(self.logDir,self.modelName+"_summary")
 		self.ckptDir = os.path.join(self.logDir,self.modelName+"_ckpt")
 		self.lr = lr
-		
+		self.TAU = TAU
+
 		OPTIMIZER= {
 		"sgd": tf.keras.optimizers.SGD(learning_rate=self.lr),
 		"Adam" : tf.keras.optimizers.Adam(learning_rate=self.lr),
@@ -37,8 +38,9 @@ class SAC:
 		"mse"   : tf.keras.losses.MSE,
 		} 
 
-		self.opt = OPTIMIZER[optimizer]
-		self.loss = LOSS[loss]
+		self.polOpt = OPTIMIZER[optimizer]
+		self.qOpt   = OPTIMIZER[optimizer]
+		self.vOpt   = OPTIMIZER[optimizer]
 
 
 		####### network definition #############
@@ -62,7 +64,9 @@ class SAC:
 		return policyLossOp
 	def qValLoss(self,currentState,action,reward,nextState):
 		## define loss function for Q value 
-		#TODO : define data structure for current state next state and reward
+		#TODO : define data structure for current state next state and reward  
+		#UPDATE : added few changes in Policy return to be consistent with value and Q function 
+
 		vValNext = self.ValueFn.ValFnForward(nextState,training=False)
 		qVal= self.QSample.QvalForward(currentState,action,training=True) ## stochastic sampling of state
 		qTarget = reward + self.gamma*vValNext ## Question why not use QTarget instead of QVal
@@ -82,11 +86,33 @@ class SAC:
 		return tf.reduce_sum(0.5*tf.pow((value-softValue),2))
 
 	def flipQVal(self):
-		#TODO : code to flip the QVal function
-		pass
+		## change the Q value from target to Sample
+		#TOD : check if it is working or not 
+		varName = [v.name for v in self.QSample.trainable_variables]
+		for name in varName:
+			self.QSample.trainable_variables[name] = self.target.trainable_variables[name]
+		return 
+		
+
+	def softUpdate(self,locModel,tagModel):
+		"""
+		soft update the model parameters.
+		theta_target = tau*theta_local + (1-tau)theta_target
+		"""
+		#TODO : check if its working or not 
+		varName = [v.name for v in tagModel.trainable_variables]
+		for name in varName:
+			tagModel.trainable_variables[name] = self.TAU*tagModel.trainable_variables[name]+(1-self.TAU)*locModel.trainable_variables[name]
+		return 
+
+
+
+
+
 	def train(self):
-		with tf.GradientTape() as gradTape:
+		with tf.GradientTape(persistent=True) as tape:
 			## training the model
+			# TODO 
 			##################### code for data queue ###################
 			batchState,batchReward,batchAction,batchNextState = 
 			#############################################################
@@ -95,21 +121,20 @@ class SAC:
 			lossQValue = self.qValLoss(batchState,batchAction,batchReward,batchNextState)
 			lossVvalue = self.vValLoss(batchState,batchAction)
 
-			## TODO : define gradient tape for the policy 
-			policyGradient = genTape.gradient(lossPolicy,self.policy.)
-			QGradient = genTape.gradient(lossQValue,self.QSample.finalModel.trainable_variables)
-			ValGradient = genTape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
+			#ToDO : modofy the policy model
+			policyGradient = tape.gradient(lossPolicy,self.policy.)
+			QGradient = tape.gradient(lossQValue,self.QSample.finalModel.trainable_variables)
+			ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
 
-			## TODO : define intial condition for valOldGrad
-			ValOldGrad = ValGradient
+			
+			ValOldGrad = copy.deepcopy(self.ValueFn.finalModel)
 
-			##TODO : How to do this part ??
-			NewValGradient = 
-			## TODO : define optimizer 
+			
+			
 			self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
 			self.qOpt.apply_gradients(zip(QGradient, self.QSample.finalModel.trainable_variables))
 			self.vOpt.apply_gradients(zip(NewvalGradient, self.ValueFn.finalModel.trainable_variables))
 			## update the gradient of value function 
+			#TODO : check if its pointer based or you need to use deepcopy to initialize valOldGrad
+			self.softUpdate(locModel=valOldGrad, tagModel =self.ValueFn.finalModel)
 
-
-			ValOldGrad = ValGradient
