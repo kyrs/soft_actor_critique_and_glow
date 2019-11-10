@@ -63,6 +63,9 @@ class SAC:
 		policyLossOp = tf.reduce_sum(logPolicy-qVal)
 		return policyLossOp
 	def qValLoss(self,currentState,action,reward,nextState):
+
+		#### NOTE function calculation depend on two key state and action  make sure they are consistent####
+		# part of TODO ^^^
 		## define loss function for Q value 
 		#TODO : define data structure for current state next state and reward  
 		#UPDATE : added few changes in Policy return to be consistent with value and Q function 
@@ -87,7 +90,7 @@ class SAC:
 
 	def flipQVal(self):
 		## change the Q value from target to Sample
-		#TOD : check if it is working or not 
+		#TODO : check if it is working or not 
 		varName = [v.name for v in self.QSample.trainable_variables]
 		for name in varName:
 			self.QSample.trainable_variables[name] = self.target.trainable_variables[name]

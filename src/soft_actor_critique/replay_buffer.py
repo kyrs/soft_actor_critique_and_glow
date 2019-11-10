@@ -28,7 +28,7 @@ class ReplayBuffer(object):
 		self.seed = random.seed(seed)
 		self.batchSize = batchSize
 		self.memory = deque(maxlen = self.maxLen)
-		self.experience = namedtuple("experience", ["currentState","action","reward","nextState","done"])
+		self.experience = namedtuple("experience", ["state","action","reward","next_state","done"])
 
 	def add(self,currentState,action,reward,nextState,done):
 		## items to add into the deque 
@@ -55,27 +55,7 @@ class ReplayBuffer(object):
 		# batchNextState	 = np.vstack([exp.nextState for exp in batch if exp is not None])
 		# batchDone 		 = np.vstack([exp.done for exp in batch if exp is not None])
 
-		batchCurState = []
-		batchAct = []
-		batchReward=[]
-		batchNextState = []
-		batchDn = []
-
-		for exp in batch:
-			## feature of the experience 
-			curState = [exp.currentState[name] for name in ordLayProcs]
-			act = [exp.action[name] for name in ordLayProcs]
-			reward = exp.reward
-			nxtState = [exp.nextState[name] for name in ordLayProcs]
-			batchDone = exp.done
-
-			batchCurState.append(curState)
-			batchAct.append(act)
-			batchReward.append(reward)
-			batchNextState.append(nxtState)
-			batchDn.append(batchDone)
-
-		return (batchCurrentState,batchAct,batchReward,batchNextState,batchDn)
+		return batch
 
 	def __len__(self):
 		## defining the length option for the agent

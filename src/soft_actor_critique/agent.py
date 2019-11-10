@@ -23,7 +23,7 @@ ordLayProcs = ["enc_eps_0","enc_eps_1","enc_eps_2","enc_eps_3","enc_eps_4","enc_
 dictFormat = {
 	"state"  :
 	"action" :
-	"next state" :
+	"next_state" :
 	"done" : 
 }
 """
@@ -34,15 +34,7 @@ class Policy(object):
 	def __init__(self,eps_layers=6,conv_size = 1):
 		## total no of layers in a network
 		self.eps_layers = eps_layers 
-		# self.eps_name_size = {"enc_eps_0":(128, 128, 6),"enc_eps_1":(64, 64, 12),
-							# "enc_eps_2":( 32, 32, 24),
-							# "enc_eps_3":(16, 16, 48),
-							# "enc_eps_4":(8, 8, 96),
-							# "enc_eps_5": ( 4, 4, 384)}
-
-		## creating a list of model based on the input data
-		# self.modelDict = {name:self.fnApprox(layer_specific_mean=[(shape[2],1)],layer_specific_var=[(shape[2],1)],input_shape=shape) 
-		# 					for name,shape in eps_name_size}
+		self.finalModel = self.PolicyApprox()
 
 
 	def fnApprox(self,layer_specific_mean=[],layer_specific_var=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5 ):
@@ -110,54 +102,30 @@ class Policy(object):
 						for name in ordLayProcs]
 
 		## list of the output (action for each individual element)
-		actionList = []
-
+		meanOut = []
+		logVarOut = []
 		outputList = []
-		logProbVal = 0
+		
 		for model,inputState in zip(modelList,inputList):
 			mean,var = model
 			meanOut  = mean(inputState)
 			varOut   = var(inputState)
-			# newVal = tf.random.normal(meanOut.shape,mean=meanOut,stdDev =tf.sqrt(tf.exp(varOut))) ## re-parametization trick
+
+			logVarOut.append(varOut)
+			meanOut.append(meanOut)
+			
+
 			newValDist = tfd.normal(loc =meanOut,scale=tf.sqrt(tf.exp(varOut)))
 
 			action = newValDist.sample()
 			prob = newValDist.prob(action)
-			logProbVal+=tf.math.log(prob)
 			actionList.append(action)			
-		# 	outputList.append(entropyModel(newVal))
-
-		# ## concatenate all the output and then putting a sigmoid as an output
-		# concatOut = tf.keras.layers.Concatenate()(outputList)
-		# logit = tf.keras.Dense(1)(concatOut)
-		# prob = tf.keras.layers.sigmoid()(logit)
-		# logProb = tf.math.log(prob)
 
 
-		outputList  = [logProbVal]+actionList ## appending the list of all output tensor
+		outputList  = [actionList,meanOut,logVarOut] ## appending the list of all output tensor
 		finalModel  = tf.keras.model(inputs=inputList,outputs=outputList)
 		return finalModel
 		
-
-	def entropyCalc(self,layerInfo=[512],inputShape=[]):
-		## creating model to calculate entropy from the input action 
-		"""
-		layerInfo : it is a list of the hidden layer network
-		
-		----return----
-		model which takes an input and  flatten it 
-		"""
-		inputLayer = tf.keras.layers.Input(shape=inputShape)
-		model = tf.keras.Sequential()
-
-		model.add(tf.keras.flatten())
-		## enumerating the list of the hiden 
-		for i,hiddenLayer in enumerate(layerInfo):
-
-			model.add(tf.keras.layers.Dense(hiddenLayer))
-			model.add(tf.keras.layers.ReLU())
-
-		return model
 
 	def samplePolicy(self,modelDict={},inputDict={}):
 	"""
@@ -168,24 +136,23 @@ class Policy(object):
 	return next state, and action resulting it
 
 	"""
-	## TODO : USE FINAL MODEL BASED METHOD
+	# TOD:FULL CODE REVIEW
 		action = {}
 		state  = {}
 		newState = {}
 		mean = {}
 		varLog = {}
-		for layerName,layerValue in inputDict.items():
-			meanModel,varModel = modelDict[layerName]
 
-			meanMat = meanModel(value, Training=False)
-			varLog  = varModel(value, Training=False)
+		crtInput = [inputDict[layerName]["state"] for elm in ordLayProcs]
 
-			newVal = tf.random.normal(meanMat.shape,mean=meanMat,stdDev =tf.sqrt(tf.exp(varLog)))
-			newState[layerName]["state"] = layerValue+newVal
+		actionOut,meanOut,varOut = self.finalModel(crtInput)
+		for newVal,meanMat,varLogMat,layerValue,layerName in zip(actionOut,meanOut,varOut,crtInput,ordLayProcs):
+			
+			newState[layerName]["new_state"] = layerValue+newVal
 			outputDict[layerName]["action"] = newVal
 			state[layerName]["state"] = layerValue
 			mean[layerName]["mean"] = meanMat
-			varLog[layerName]["varLog"] = varLog
+			varLog[layerName]["varLog"] = varLogMat
 
 		
 		return (newState,state,action,mean,varLog)
