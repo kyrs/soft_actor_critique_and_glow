@@ -38,7 +38,7 @@ class Policy(object):
 
 
 	def fnApprox(self,layer_specific_mean=[],layer_specific_var=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5 ):
-	"""
+		"""
 		layer_specific_mean : list of tuple with (output layer specifics and kernel shapes)
 		layer_specific_var  : list of tuple with (output layer specifics and kernel shapes)
 		input_shape : [rows,col,channel] specifics of the input matrix
@@ -64,7 +64,7 @@ class Policy(object):
 
 			#meanApprox.add(tf.keras.layers.ReLU())
 
-		meanModelOut = meanApprox(input_layer)
+		meanModelOut = meanApprox(inputLayer)
 
 		## creating the function for the variance calculation 
 		varApprox = tf.keras.Sequential()
@@ -102,40 +102,40 @@ class Policy(object):
 						for name in ordLayProcs]
 
 		## list of the output (action for each individual element)
-		meanOut = []
-		logVarOut = []
+		meanOutList = []
+		logVarOutList = []
 		outputList = []
-		
+		actionList = []
 		for model,inputState in zip(modelList,inputList):
 			mean,var = model
 			meanOut  = mean(inputState)
 			varOut   = var(inputState)
 
-			logVarOut.append(varOut)
-			meanOut.append(meanOut)
+			logVarOutList.append(varOut)
+			meanOutList.append(meanOut)
 			
 
-			newValDist = tfd.normal(loc =meanOut,scale=tf.sqrt(tf.exp(varOut)))
+			newValDist = tfp.distributions.Normal(loc =meanOut,scale=tf.sqrt(tf.exp(varOut)))
 
 			action = newValDist.sample()
 			prob = newValDist.prob(action)
 			actionList.append(action)			
 
 
-		outputList  = [actionList,meanOut,logVarOut] ## appending the list of all output tensor
-		finalModel  = tf.keras.model(inputs=inputList,outputs=outputList)
+		outputList  = [actionList,meanOutList,logVarOutList] ## appending the list of all output tensor
+		finalModel  = tf.keras.Model(inputs=inputList,outputs=outputList)
 		return finalModel
 		
 
 	def samplePolicy(self,modelDict={},inputDict={}):
-	"""
-	modelDict : dict of model for finding the mean and variance of an action
-	inputDict : dict of input state vector
+		"""
+		modelDict : dict of model for finding the mean and variance of an action
+		inputDict : dict of input state vector
 
-	---return---
-	return next state, and action resulting it
+		---return---
+		return next state, and action resulting it
 
-	"""
+		"""
 	# TOD:FULL CODE REVIEW
 		action = {}
 		state  = {}
@@ -164,7 +164,7 @@ class Policy(object):
 			mean = mean[name]["mean"]
 			varLog = varLog[name]["varLog"]
 			action = action[name]["action"]
-			val = tfp.LogNormal(loc=mean,scale = tf.sqrt(tf.exp(varLog))).log_prob(action)
+			val = tfp.distributions.LogNormal(loc=mean,scale = tf.sqrt(tf.exp(varLog))).log_prob(action)
 			logVal+=val
 
 		return logVal
@@ -247,8 +247,11 @@ class QValFn(object):
 
 		--return--
 		"""
-		modelList = [self.fnApprox(layer_specific_param=[(shape[2],1)],input_shape= eps_name_size[name]) 
+		modelList = [self.fnApprox(layer_specific_param=[(eps_name_size[name][2],1)],input_shape= eps_name_size[name]) 
 							for name in ordLayProcs]
+
+
+
 		inputList= [(tf.keras.layers.Input(shape=eps_name_size[name]),tf.keras.layers.Input(shape=eps_name_size[name])) 
 						for name in ordLayProcs]
 
@@ -272,7 +275,7 @@ class QValFn(object):
 				loopInput = tf.keras.layers.Dense(layerInfo)(loopInput)
 
 		output = loopInput
-		finalModel  = tf.keras.model(inputs=inputList,outputs=output)
+		finalModel  = tf.keras.Model(inputs=inputList,outputs=output)
 		return finalModel
 
 	def QvalForward(self,state,action):
@@ -296,7 +299,8 @@ class QValFn(object):
 
 # ---------------------------defining the value function --------------------------------
 class ValFn(object):
-	self.finalModel = self.valFnApprox()
+	def __init__(self):
+		self.finalModel = self.valFnApprox()
 
 	def fnApprox(self,layer_specific_param=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5,denseLayer=512):
 		##  function approximator, returning a concatenated output for given state 
@@ -331,7 +335,7 @@ class ValFn(object):
 
 		stateModelOut = stateModel(state)
 
-		fnApprox = tf.keras.Model(inputs=state,outputs=output)
+		fnApprox = tf.keras.Model(inputs=state,outputs=stateModelOut)
 		return fnApprox
 
 	def valFnApprox(self,denseLayerInfo=[512,1]):
@@ -342,7 +346,7 @@ class ValFn(object):
 
 		--return--
 		"""
-		modelList = [self.fnApprox(layer_specific_param=[(shape[2],1)],input_shape= eps_name_size[name]) 
+		modelList = [self.fnApprox(layer_specific_param=[(eps_name_size[name][2],1)],input_shape= eps_name_size[name]) 
 							for name in ordLayProcs]
 		inputList= [(tf.keras.layers.Input(shape=eps_name_size[name])) 
 						for name in ordLayProcs]
@@ -367,7 +371,7 @@ class ValFn(object):
 				loopInput = tf.keras.layers.Dense(layerInfo)(loopInput)
 
 		output = loopInput
-		finalModel  = tf.keras.model(inputs=inputList,outputs=output)
+		finalModel  = tf.keras.Model(inputs=inputList,outputs=output)
 		return finalModel
 
 	def ValFnForward(self,state):

@@ -8,6 +8,10 @@ from PIL import Image
 import numpy as np
 import json
 import time
+
+
+
+
 def main():
 	fileName1  = "/home/shubham/IIIT/glow/demo/test/img.png"
 	imgObj1 = Image.open(fileName1)

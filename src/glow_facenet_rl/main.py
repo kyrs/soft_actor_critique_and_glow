@@ -74,21 +74,3 @@ def decoder():
 	return json.dumps({"dist":123})
 if __name__ =="__main__":
 	app.run()
-	# fileName1  = "/home/shubham/IIIT/glow/demo/test/img.png"
-	# print ("started..")
-	# imgObj1 = Image.open(fileName1)
-	# obj = np.array(imgObj1)	
-	# out = Image.fromarray(obj)
-	# imgObj1=out
-	# for i in range(5):
-	# 	start = time.time()
-	# 	img_glow_emb = glowFetExtMod.fetch_glow_embedding(imgObj=imgObj1)
-	# 	### processing second image 
-	# 	t1 = time.time()
-	# 	tup = ("Smiling",0.65)
-	# 	new_glow_emb,image = glowFetExtMod.action_rl(emb=img_glow_emb,attr_tup=tup)	
-	# 	t2 = time.time()
-	# 	dist = faceNetMod.face_compare(np.array(imgObj1),np.array(image))
-	# 	t3 = time.time()
-	# 	print(dist)
-	# 	print("total time : %f,embedding time : %f, action time : %f, reward time : %f"%(time.time()-start,t1-start,t2-t1,t3-t2))

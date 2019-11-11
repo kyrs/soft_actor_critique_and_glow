@@ -5,20 +5,23 @@ __date__   : 26-10-2019
 written in tf2.0
 """
 from agent import Policy,QValFn,ValFn
+ 
+
+
+# import agent
 import os 
 import tensorflow as tf 
 import tensorflow_probability as tfp
 import copy
 
 class SAC:
-	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,loss,modelName,logDir,lr, TAU):
+	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,modelName,logDir,lr,TAU):
 		
 		self.epoch = epoch
 		self.gamma = gamma
 		self.batchTr =  batchTr
 		self.batchVal = batchVal
 		self.opt = optimizer
-		self.loss = loss
 		self.modelName = modelName
 		self.logDir = logDir
 		self.sumDir = os.path.join(self.logDir,self.modelName+"_summary")
@@ -112,20 +115,20 @@ class SAC:
 
 
 
-	def train(self):
+	def train(self,batchState,batchReward,batchAction,batchNextState):
 		with tf.GradientTape(persistent=True) as tape:
 			## training the model
 			# TODO 
 			##################### code for data queue ###################
-			batchState,batchReward,batchAction,batchNextState = 
+			# batchState,batchReward,batchAction,batchNextState = 
 			#############################################################
 
 			lossPolicy = self.policyLoss(batchState)
 			lossQValue = self.qValLoss(batchState,batchAction,batchReward,batchNextState)
 			lossVvalue = self.vValLoss(batchState,batchAction)
 
-			#ToDO : modofy the policy model
-			policyGradient = tape.gradient(lossPolicy,self.policy.)
+			#TODO : modofy the policy model
+			policyGradient = tape.gradient(lossPolicy,self.policy.finalModel.trainable_variables)
 			QGradient = tape.gradient(lossQValue,self.QSample.finalModel.trainable_variables)
 			ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
 
