@@ -24,10 +24,10 @@ class ReplayBuffer(object):
 		batchSize : batchsize for sampling  
 		"""
 
-		self.maxLen = maxLen
+		self.maxlen = maxlen
 		self.seed = random.seed(seed)
 		self.batchSize = batchSize
-		self.memory = deque(maxlen = self.maxLen)
+		self.memory = deque(maxlen = self.maxlen)
 		self.experience = namedtuple("experience", ["state","action","reward","next_state","done"])
 
 	def add(self,currentState,action,reward,nextState,done):

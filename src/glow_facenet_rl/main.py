@@ -12,6 +12,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 from flask import Flask
 from flask import request
 import json
+from sklearn.metrics.pairwise import euclidean_distances 
 app = Flask(__name__)
 ### adding the respective module in to the memory 
 sys.path.insert(0,"/home/shubham/IIIT/glow/demo")
@@ -19,6 +20,15 @@ sys.path.insert(0,"/home/shubham/IIIT/facenet/src")
 ############## importing respective files for each of the model ############
 import rl_latent_manipulation as glowFetExtMod
 import rl_based_feature_ext as faceNetMod
+
+
+################# DEFINED IMAGE AS TARGET ###############################
+ImagePath = "/home/shubham/IIIT/glow/demo/test/img.png"
+imgObj1 = Image.open(ImagePath)
+targetImgEmbed = glowFetExtMod.fetch_glow_embedding(imgObj=imgObj1)
+targetVec = glowFetExtMod.flatten_eps_dict(targetImgEmbed)
+
+#################################################################33
 
 
 def send_numpy_network(input_dict):
@@ -72,5 +82,21 @@ def decoder():
 	print(dist)
 	# print("total time : %f,embedding time : %f, action time : %f, reward time : %f"%(time.time()-start,t1-start,t2-t1,t3-t2))
 	return json.dumps({"dist":123})
+
+@app.route('/reward',methods=['POST'])
+def reward():
+	data = request.json
+	img_glow_dict = recieve_numpy_network(data["feature"])
+	img_glow_emb = glowFetExtMod.flatten_eps_dict(img_glow_dict)
+	newImage = np.array(glowFetExtMod.decode(img_glow_emb)[0])
+
+	##### Facenet score value #########
+	dist = faceNetMod.face_compare(np.array(imgObj1),np.array(newImage))
+
+	##### eucd Distance ##############
+	eucdDistance  =  euclidean_distances(img_glow_emb, targetVec)
+
+	return json.dumps(send_numpy_network({"eucd":eucdDistance,"facenet":dist}))
+
 if __name__ =="__main__":
 	app.run()

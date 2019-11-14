@@ -3,21 +3,40 @@
 @date   : 10-10-2019
 @desc   : making compatibility between tf 1.14 and tf 2.0 using flask 
 """
+
+## NOTE : FOR COMPUTATIONAL OPTIMIZATION WE ARE USING THE TARGET IMAGE IN MAIN FUNCTION
+
 import requests
 from PIL import Image
 import numpy as np
 import json
 import time
 
+urlEncoder = "http://127.0.0.1:5000/encoder"
+urlDecoder = "http://127.0.0.1:5000/decoder"
+urlReward = "http://127.0.0.1:5000/reward"
+def send_numpy_network(input_dict):
+	## convert numpy file to list
+	return_dict = {}
+	for elmKey,val in input_dict.items():
+		return_dict[elmKey] = val.tolist() 
+	return return_dict
 
+def recieve_numpy_network(input_dict):
+	## convert list to numpy array
+	outDict = {}
+	for elmKey,val in input_dict.items():
+		npVal = np.array(val)
+		outDict[elmKey] = npVal.astype(np.float32)
+	return outDict
 
 
 def main():
-	fileName1  = "/home/shubham/IIIT/glow/demo/test/img.png"
+
+	fileName1  = "../../images/sh1.jpg"
 	imgObj1 = Image.open(fileName1)
-	image = np.array(imgObj1)
-	urlEncoder = "http://127.0.0.1:5000/encoder"
-	urlDecoder  = "http://127.0.0.1:5000/decoder"
+	testImg = imgObj1.resize((256,256)) 
+	image = np.array(testImg)
 	resp = requests.post(urlEncoder,json = {"image":image.tolist()})
 	outDict = json.loads(resp.content)
 
@@ -28,5 +47,39 @@ def main():
 	requests.post(urlDecoder,json={"feature":outDict, "image":image.tolist()}) 
 	end = time.time()
 	print(end - start)
+
+def encoderVec(imagePath):
+	## fetching encoder path 
+	imgObj1 = Image.open(imagePath)
+	testImg = imgObj1.resize((256,256))
+	image = np.array(testImg)
+	resp = requests.post(urlEncoder,json = {"image":image.tolist()})
+	outDict = json.loads(resp.content)
+	outDict=recieve_numpy_network(outDict)
+	return outDict
+
+def reward(outDict=[],LAMBDA=100,DistUp=1000):
+	## TODO : FIRST FLASK CALL TAKES SOME TIME 
+	## TODO : EUCD DISTANCE IS NOT ZERO ( for some reason could be stochasticity in glow)
+	## dictionary with the key value wuth corresponding keyname and value 
+
+	# fileName1  = "../../images/sh1.jpg"
+	# imgObj1 = Image.open(fileName1)
+	# testImg = imgObj1.resize((256,256))
+	# image = np.array(testImg)
+	# resp = requests.post(urlEncoder,json = {"image":image.tolist()})
+	# outDict = json.loads(resp.content)
+	# outDict=recieve_numpy_network(outDict)
+
+	start = time.time()
+	reward = requests.post(urlReward,json={"feature":send_numpy_network(outDict)})
+	end = time.time()
+	totTime = end-start
+	outDict = json.loads(reward.content)
+	if outDict["eucd"][0][0]<100:
+		return LAMBDA*outDict["facenet"][0][1]-outDict["eucd"][0][0],True
+	else:
+		return LAMBDA*outDict["facenet"][0][1]-outDict["eucd"][0][0],False
+
 if __name__ =="__main__":
-	main()
+	reward()

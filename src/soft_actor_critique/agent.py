@@ -127,9 +127,9 @@ class Policy(object):
 		return finalModel
 		
 
-	def samplePolicy(self,modelDict={},inputDict={}):
+	def samplePolicy(self,inputDict={}):
 		"""
-		modelDict : dict of model for finding the mean and variance of an action
+		
 		inputDict : dict of input state vector
 
 		---return---
@@ -137,22 +137,22 @@ class Policy(object):
 
 		"""
 	# TOD:FULL CODE REVIEW
-		action = {}
-		state  = {}
-		newState = {}
-		mean = {}
-		varLog = {}
+		action = {"action":{}}
+		state  = {"states":{}}
+		newState = {"states":{}}
+		mean = {"mean":{}}
+		varLog = {"varLog":{}}
 
-		crtInput = [inputDict[layerName]["state"] for elm in ordLayProcs]
+		crtInput = [inputDict["states"][elm] for elm in ordLayProcs]
 
 		actionOut,meanOut,varOut = self.finalModel(crtInput)
 		for newVal,meanMat,varLogMat,layerValue,layerName in zip(actionOut,meanOut,varOut,crtInput,ordLayProcs):
 			
-			newState[layerName]["new_state"] = layerValue+newVal
-			outputDict[layerName]["action"] = newVal
-			state[layerName]["state"] = layerValue
-			mean[layerName]["mean"] = meanMat
-			varLog[layerName]["varLog"] = varLogMat
+			newState["states"][layerName] = layerValue+newVal
+			action["action"][layerName] = newVal
+			state["states"][layerName] = layerValue
+			mean["mean"][layerName] = meanMat
+			varLog["varLog"][layerName] = varLogMat
 
 		
 		return (newState,state,action,mean,varLog)
@@ -161,9 +161,9 @@ class Policy(object):
 		## calculating the log of the policy for given parameter
 		logVal = 0 
 		for i,name in enumerate(ordLayProcs):
-			mean = mean[name]["mean"]
-			varLog = varLog[name]["varLog"]
-			action = action[name]["action"]
+			mean = mean["mean"][name]
+			varLog = varLog["varLog"][name]
+			action = action["action"][name]
 			val = tfp.distributions.LogNormal(loc=mean,scale = tf.sqrt(tf.exp(varLog))).log_prob(action)
 			logVal+=val
 
@@ -288,8 +288,8 @@ class QValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(state[name]["state"])
-			modelInp.append(action[name]["action"])
+			modelInp.append(state["state"][name])
+			modelInp.append(action["action"][name])
 
 		return self.finalModel(modelInp)
 
@@ -384,7 +384,7 @@ class ValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(state[name]["state"])
+			modelInp.append(state["state"][name])
 
 		return self.finalModel(modelInp)
 
