@@ -30,10 +30,10 @@ class SAC:
 		self.TAU = TAU
 
 		OPTIMIZER= {
-		"sgd": tf.keras.optimizers.SGD(learning_rate=self.lr),
-		"Adam" : tf.keras.optimizers.Adam(learning_rate=self.lr),
-		"rmsProp" : tf.keras.optimizers.RMSprop(learning_rate=self.lr),
-		"adaGrad" : tf.keras.optimizers.Adagrad(learning_rate=self.lr)
+		"sgd": tf.keras.optimizers.SGD(learning_rate=self.lr,clipvalue=0.5),
+		"Adam" : tf.keras.optimizers.Adam(learning_rate=self.lr,clipvalue=0.5),
+		"rmsProp" : tf.keras.optimizers.RMSprop(learning_rate=self.lr,clipvalue=0.5),
+		"adaGrad" : tf.keras.optimizers.Adagrad(learning_rate=self.lr,clipvalue=0.5)
 
 		}
 		LOSS = {
@@ -60,9 +60,11 @@ class SAC:
 
 	def policyLoss(self,currentState):
 		## define loss function for policy function
-		action = self.policy.samplePolicy(currentState,training=True)
-		logPolicy = self.policy.lgOfPolicy(action,training=True) 
-		qval = self.QSample.QvalForward(currentState,action,training=False)
+		# action = self.policy.samplePolicy(currentState,training=True)
+		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=True)
+		logPolicy = self.policy.lgOfPolicy(mean,varLog,action) 
+		# print(logPolicy)
+		qVal = self.QSample.QvalForward(currentState,action,training=False)
 		policyLossOp = tf.reduce_sum(logPolicy-qVal)
 		return policyLossOp
 	def qValLoss(self,currentState,action,reward,nextState):
@@ -77,16 +79,16 @@ class SAC:
 		qVal= self.QSample.QvalForward(currentState,action,training=True) ## stochastic sampling of state
 		qTarget = reward + self.gamma*vValNext ## Question why not use QTarget instead of QVal
 		
-		loss = tf.reduce_sum(0.5*tf.pow(qVal-qTarget),2) ## loss is explicitly defined for q based gradient  not for value function
+		loss = tf.reduce_sum(0.5*tf.pow((qVal-qTarget),2)) ## loss is explicitly defined for q based gradient  not for value function
 		return loss 
 
 	def vValLoss(self,currentState,action):
 		## define loss function for value function
 
 		value = self.ValueFn.ValFnForward(currentState,training=True)
-		policyParam = self.policy.samplePolicy(currentState,training=False)
+		_,_,_,mean,varLog = self.policy.samplePolicy(currentState,training=False)
 		qVal =  self.QSample.QvalForward(currentState,action,training=False) 
-		logPolicy = self.policy.lgOfPolicy(policyParam,action,training=False)
+		logPolicy = self.policy.lgOfPolicy(mean,varLog,action)
 		softValue = tf.reduce_sum(qVal-logPolicy)
 		
 		return tf.reduce_sum(0.5*tf.pow((value-softValue),2))
@@ -115,7 +117,7 @@ class SAC:
 
 
 
-	def train(self,batchState,batchReward,batchAction,batchNextState):
+	def train(self,epState,batchState,batchReward,batchAction,batchNextState):
 		with tf.GradientTape(persistent=True) as tape:
 			## training the model
 			# TODO 
@@ -133,14 +135,20 @@ class SAC:
 			ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
 
 			
-			ValOldGrad = copy.deepcopy(self.ValueFn.finalModel)
+			# ValOldGrad = tf.keras.models.clone_model(self.ValueFn.finalModel)
 
 			
-			
-			self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
-			self.qOpt.apply_gradients(zip(QGradient, self.QSample.finalModel.trainable_variables))
-			self.vOpt.apply_gradients(zip(NewvalGradient, self.ValueFn.finalModel.trainable_variables))
-			## update the gradient of value function 
-			#TODO : check if its pointer based or you need to use deepcopy to initialize valOldGrad
-			self.softUpdate(locModel=valOldGrad, tagModel =self.ValueFn.finalModel)
+			if (epState%3==0):
+				print("policy")
+				self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
+			elif(epState%3==1):
+				print("qOpt")
+				self.qOpt.apply_gradients(zip(QGradient, self.QSample.finalModel.trainable_variables))
+			else:
+				print("vVal")
+				self.vOpt.apply_gradients(zip(ValGradient, self.ValueFn.finalModel.trainable_variables))
+			# ## update the gradient of value function 
+			# #TODO : check if its pointer based or you need to use deepcopy to initialize valOldGrad
+			# self.softUpdate(locModel=valOldGrad, tagModel =self.ValueFn.finalModel)
 
+			return lossPolicy,lossQValue,lossVvalue

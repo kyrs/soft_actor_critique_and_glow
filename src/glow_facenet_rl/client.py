@@ -15,11 +15,14 @@ import time
 urlEncoder = "http://127.0.0.1:5000/encoder"
 urlDecoder = "http://127.0.0.1:5000/decoder"
 urlReward = "http://127.0.0.1:5000/reward"
-def send_numpy_network(input_dict):
+def send_numpy_network(input_dict,tensor=True):
 	## convert numpy file to list
 	return_dict = {}
 	for elmKey,val in input_dict.items():
-		return_dict[elmKey] = val.tolist() 
+		if tensor:
+			return_dict[elmKey] = val.numpy().tolist()
+		else:
+			 return_dict[elmKey] = val.tolist()
 	return return_dict
 
 def recieve_numpy_network(input_dict):
@@ -58,7 +61,7 @@ def encoderVec(imagePath):
 	outDict=recieve_numpy_network(outDict)
 	return outDict
 
-def reward(outDict=[],LAMBDA=100,DistUp=1000):
+def reward(outDict=[],LAMBDA=10000,DistUp=10000):
 	## TODO : FIRST FLASK CALL TAKES SOME TIME 
 	## TODO : EUCD DISTANCE IS NOT ZERO ( for some reason could be stochasticity in glow)
 	## dictionary with the key value wuth corresponding keyname and value 
@@ -75,11 +78,20 @@ def reward(outDict=[],LAMBDA=100,DistUp=1000):
 	reward = requests.post(urlReward,json={"feature":send_numpy_network(outDict)})
 	end = time.time()
 	totTime = end-start
+	print(reward.content)
 	outDict = json.loads(reward.content)
+	
+
+	##TODO : define reward functions
+	if len(outDict["facenet"][0])==1 and outDict["eucd"][0][0] <5000 :
+		return -100,outDict["eucd"][0][0],False
+	elif len(outDict["facenet"][0])==1 and outDict["eucd"][0][0] >5000 :
+		return -100*np.log(outDict["eucd"][0][0]),outDict["eucd"][0][0],False 
+
 	if outDict["eucd"][0][0]<100:
-		return LAMBDA*outDict["facenet"][0][1]-outDict["eucd"][0][0],True
+		return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],True
 	else:
-		return LAMBDA*outDict["facenet"][0][1]-outDict["eucd"][0][0],False
+		return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],False
 
 if __name__ =="__main__":
 	reward()

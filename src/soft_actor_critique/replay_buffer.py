@@ -17,16 +17,15 @@ ordLayProcs = ["enc_eps_0","enc_eps_1","enc_eps_2","enc_eps_3","enc_eps_4","enc_
 
 
 class ReplayBuffer(object):
-	def __init__(self,maxlen,seed,batchSize):
+	def __init__(self,maxlen,seed):
 		"""
 		maxLen : max length of the deque
-		seed   : defining the random state
-		batchSize : batchsize for sampling  
+		seed   : defining the random state  
 		"""
 
 		self.maxlen = maxlen
 		self.seed = random.seed(seed)
-		self.batchSize = batchSize
+		# self.batchSize = batchSize
 		self.memory = deque(maxlen = self.maxlen)
 		self.experience = namedtuple("experience", ["state","action","reward","next_state","done"])
 
@@ -43,11 +42,11 @@ class ReplayBuffer(object):
 		self.memory.append(exp)
 
 
-	def sample(self):
+	def sample(self,batch):
 		## method for sampling the data from the deque
 
 		## OUTPUT :  vstacked sampled output
-		batch = random.sample(self.memory,self.batchSize)
+		batch = random.sample(self.memory,batch)
 
 		# batchCurrentState= np.vstack([exp.currentState for exp in batch if exp is not None])
 		# batchAction 	 = np.vstack([exp.action for exp in batch if exp is not None])

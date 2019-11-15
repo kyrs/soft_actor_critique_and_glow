@@ -36,7 +36,7 @@ class Policy(object):
 		self.eps_layers = eps_layers 
 		self.finalModel = self.PolicyApprox()
 
-
+	# @tf.function
 	def fnApprox(self,layer_specific_mean=[],layer_specific_var=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5 ):
 		"""
 		layer_specific_mean : list of tuple with (output layer specifics and kernel shapes)
@@ -87,7 +87,7 @@ class Policy(object):
 		varModel  = tf.keras.Model(inputs=inputLayer,outputs=varModelOut)
 
 		return (meanModel,varModel)
-
+	# @tf.function
 	def PolicyApprox(self):
 		## function to approximate the policy for the network
 		modelList = [self.fnApprox(layer_specific_mean=[(eps_name_size[name][2],1)],layer_specific_var=[(eps_name_size[name][2],1)],
@@ -127,7 +127,7 @@ class Policy(object):
 		return finalModel
 		
 
-	def samplePolicy(self,inputDict={}):
+	def samplePolicy(self,inputDict,training):
 		"""
 		
 		inputDict : dict of input state vector
@@ -145,7 +145,7 @@ class Policy(object):
 
 		crtInput = [inputDict["states"][elm] for elm in ordLayProcs]
 
-		actionOut,meanOut,varOut = self.finalModel(crtInput)
+		actionOut,meanOut,varOut = self.finalModel(crtInput,training=training)
 		for newVal,meanMat,varLogMat,layerValue,layerName in zip(actionOut,meanOut,varOut,crtInput,ordLayProcs):
 			
 			newState["states"][layerName] = layerValue+newVal
@@ -157,16 +157,22 @@ class Policy(object):
 		
 		return (newState,state,action,mean,varLog)
 
-	def lgOfPolicy(self,mean,varLog,action):
+	def lgOfPolicy(self,meanDict,varLogDict,actionDict):
 		## calculating the log of the policy for given parameter
 		logVal = 0 
 		for i,name in enumerate(ordLayProcs):
-			mean = mean["mean"][name]
-			varLog = varLog["varLog"][name]
-			action = action["action"][name]
-			val = tfp.distributions.LogNormal(loc=mean,scale = tf.sqrt(tf.exp(varLog))).log_prob(action)
-			logVal+=val
-
+			mean = meanDict["mean"][name]
+			varLog = varLogDict["varLog"][name]
+			action = actionDict["action"][name]
+			## TODO : DOUBT ABOUT THE CALCULATION OF THE VAL (tensorflow.python.framework.errors_impl.InvalidArgumentError:
+			## Incompatible shapes: [1,128,128,6] vs. [1,64,64,12] [Op:AddV2] name: add/)
+			val = tfp.distributions.Normal(loc=mean,scale = tf.sqrt(tf.exp(varLog)),allow_nan_stats=False).log_prob(action)
+			## TODO : Very bah hack of using the log here 
+			# print(varLog)
+			####################################################BUG########################################
+			logVal+=tf.reduce_sum(val)
+			# print(val)
+			###############################################################################################
 		return logVal
 	def policyLearn(self):
 		## function for training the models 
@@ -179,7 +185,7 @@ class QValFn(object):
 	def __init__(self):
 
 		self.finalModel = self.QvalueApprox()
-
+	# @tf.function
 	def fnApprox(self,layer_specific_param=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5,denseLayer=512):
 		##  function approximator, returning a concatenated output for given state and action processed file
 		"""
@@ -238,7 +244,7 @@ class QValFn(object):
 
 		fnApprox = tf.keras.Model(inputs=[state,action],outputs=output)
 		return fnApprox
-
+	# @tf.function
 	def QvalueApprox(self,denseLayerInfo=[512,1]):
 		## creating final Qvalue model which concatenate all the individual output and return a single QValue 
 
@@ -278,7 +284,7 @@ class QValFn(object):
 		finalModel  = tf.keras.Model(inputs=inputList,outputs=output)
 		return finalModel
 
-	def QvalForward(self,state,action):
+	def QvalForward(self,state,action,training):
 		## approximating the value of Q value function.
 		"""
 		inpStateAct : dictionary with state, action 
@@ -288,10 +294,10 @@ class QValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(state["state"][name])
+			modelInp.append(state["states"][name])
 			modelInp.append(action["action"][name])
 
-		return self.finalModel(modelInp)
+		return self.finalModel(modelInp,training=training)
 
 	def QvalLearn(self):
 		pass
@@ -301,7 +307,7 @@ class QValFn(object):
 class ValFn(object):
 	def __init__(self):
 		self.finalModel = self.valFnApprox()
-
+	# @tf.function
 	def fnApprox(self,layer_specific_param=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5,denseLayer=512):
 		##  function approximator, returning a concatenated output for given state 
 		"""
@@ -337,7 +343,7 @@ class ValFn(object):
 
 		fnApprox = tf.keras.Model(inputs=state,outputs=stateModelOut)
 		return fnApprox
-
+	# @tf.function
 	def valFnApprox(self,denseLayerInfo=[512,1]):
 		## creating final Qvalue model which concatenate all the individual output and return a single QValue 
 
@@ -374,7 +380,7 @@ class ValFn(object):
 		finalModel  = tf.keras.Model(inputs=inputList,outputs=output)
 		return finalModel
 
-	def ValFnForward(self,state):
+	def ValFnForward(self,state,training):
 		## approximating the value of value function.
 		"""
 		inpStateAct : dictionary with state, action 
@@ -384,9 +390,9 @@ class ValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(state["state"][name])
+			modelInp.append(state["states"][name])
 
-		return self.finalModel(modelInp)
+		return self.finalModel(modelInp,training=training)
 
 	def ValFnLearn(self):
 		pass
