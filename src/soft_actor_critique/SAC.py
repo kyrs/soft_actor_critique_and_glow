@@ -62,8 +62,9 @@ class SAC:
 		## define loss function for policy function
 		# action = self.policy.samplePolicy(currentState,training=True)
 		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=True)
-		logPolicy = self.policy.lgOfPolicy(mean,varLog,action) 
-		# print(logPolicy)
+		# print ("policy Calc calculation :", mean["mean"]["enc_eps_5"])
+		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action)) 
+		# print(action["action"])
 		qVal = self.QSample.QvalForward(currentState,action,training=False)
 		policyLossOp = tf.reduce_sum(logPolicy-qVal)
 		return policyLossOp
@@ -87,8 +88,9 @@ class SAC:
 
 		value = self.ValueFn.ValFnForward(currentState,training=True)
 		_,_,_,mean,varLog = self.policy.samplePolicy(currentState,training=False)
-		qVal =  self.QSample.QvalForward(currentState,action,training=False) 
-		logPolicy = self.policy.lgOfPolicy(mean,varLog,action)
+		qVal =  self.QSample.QvalForward(currentState,action,training=False)
+		# print ("vavalue calculation :", mean["mean"]["enc_eps_5"]) 
+		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action))
 		softValue = tf.reduce_sum(qVal-logPolicy)
 		
 		return tf.reduce_sum(0.5*tf.pow((value-softValue),2))
@@ -118,6 +120,8 @@ class SAC:
 
 
 	def train(self,epState,batchState,batchReward,batchAction,batchNextState):
+		# print(self.policy.finalModel.summary())
+		# input()
 		with tf.GradientTape(persistent=True) as tape:
 			## training the model
 			# TODO 
@@ -139,7 +143,11 @@ class SAC:
 
 			
 			if (epState%3==0):
+				############# ask GSR : better way of regularization ################
 				print("policy")
+				print (lossPolicy)
+				# print("trainVar",self.policy.finalModel.trainable_variables)
+				# print("gradient",policyGradient)
 				self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
 			elif(epState%3==1):
 				print("qOpt")

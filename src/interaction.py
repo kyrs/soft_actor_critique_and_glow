@@ -11,11 +11,14 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 """
 ## TODO : 
  1. reward based code --done
- 2. Interaction code
+ 2. Interaction code -- done
  3. Code review 
- 4. running the base code
+ 4. running the base code --done
  5. way of seeing the modification by the model -- gif
  6. saving the log file and saving the model
+ 7. optimal rewards value
+ 8. Doubt about the log normal exploding
+ 9. tensorbo
 """
 
 sys.path.insert(0,"./soft_actor_critique")
@@ -24,7 +27,7 @@ from soft_actor_critique.replay_buffer import ReplayBuffer
 from glow_facenet_rl.client import reward,encoderVec
 
 def main():
-	obj = SAC(epoch=5,batchTr=200,batchVal=200,gamma=0.9,optimizer="adaGrad",modelName="abcd",logDir="../logs",lr=0.001,TAU=0.9)
+	obj = SAC(epoch=5,batchTr=200,batchVal=200,gamma=0.1,optimizer="adaGrad",modelName="abcd",logDir="../logs",lr=0.001,TAU=0.9)
 	RplBuf = ReplayBuffer(maxlen=1000,seed=100)
 	NOEPISODE = 1000
 	EPISODELEN=50000

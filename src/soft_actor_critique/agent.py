@@ -115,7 +115,7 @@ class Policy(object):
 			meanOutList.append(meanOut)
 			
 
-			newValDist = tfp.distributions.Normal(loc =meanOut,scale=tf.sqrt(tf.exp(varOut)))
+			newValDist = tfp.distributions.Normal(loc =meanOut,scale=tf.pow(varOut,2))
 
 			action = newValDist.sample()
 			prob = newValDist.prob(action)
@@ -159,20 +159,34 @@ class Policy(object):
 
 	def lgOfPolicy(self,meanDict,varLogDict,actionDict):
 		## calculating the log of the policy for given parameter
-		logVal = 0 
+		logVal = 100.0 
 		for i,name in enumerate(ordLayProcs):
 			mean = meanDict["mean"][name]
 			varLog = varLogDict["varLog"][name]
 			action = actionDict["action"][name]
 			## TODO : DOUBT ABOUT THE CALCULATION OF THE VAL (tensorflow.python.framework.errors_impl.InvalidArgumentError:
 			## Incompatible shapes: [1,128,128,6] vs. [1,64,64,12] [Op:AddV2] name: add/)
-			val = tfp.distributions.Normal(loc=mean,scale = tf.sqrt(tf.exp(varLog)),allow_nan_stats=False).log_prob(action)
+			val = tfp.distributions.Normal(loc=mean,scale = tf.pow(varLog,2),allow_nan_stats=False).prob(action)
 			## TODO : Very bah hack of using the log here 
-			# print(varLog)
-			####################################################BUG########################################
-			logVal+=tf.reduce_sum(val)
-			# print(val)
+			#https://stackoverflow.com/questions/10343831/clamping-negative-logarithm-of-the-probability-to-a-positive-value-in-a-informat
+
+			## TODO : there is some problem with 4X4X4 filter
+			newVal = tf.ones_like(val)+val
+			logVal+=tf.reduce_sum(tf.math.log(newVal))
+			# print(newVal)
+			###################################################BUG : fixed ########################################
+			
+			print(logVal,newVal.shape)
+			if tf.math.is_nan(logVal):
+				print(newVal)
+				print("mean : ",mean)
+				print("varLog : ",tf.sqrt(tf.exp(varLog)) )
+				input()
+			### ask sir : about log cliping ####
+		    #logValReturn =tf.math.maximum(logVal,tf.constant(-1e10, tf.float32))
 			###############################################################################################
+		
+		print("logVal : ", logVal)
 		return logVal
 	def policyLearn(self):
 		## function for training the models 
