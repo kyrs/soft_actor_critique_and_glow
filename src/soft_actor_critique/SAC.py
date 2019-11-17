@@ -110,11 +110,13 @@ class SAC:
 		theta_target = tau*theta_local + (1-tau)theta_target
 		"""
 		#TODO : check if its working or not 
-		varName = [v.name for v in tagModel.trainable_variables]
-		for name in varName:
-			tagModel.trainable_variables[name] = self.TAU*tagModel.trainable_variables[name]+(1-self.TAU)*locModel.trainable_variables[name]
-		return 
-
+		
+		for targetParam,localParam in zip(tagModel.trainable_variables,locModel.trainable_variables):
+			print ("old :",targetParam)
+			targetParam.assign(self.TAU*targetParam+(1-self.TAU)*localParam)
+			print (print ("new :",targetParam)) 
+			
+		return
 
 
 
@@ -139,7 +141,7 @@ class SAC:
 			ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
 
 			
-			# ValOldGrad = tf.keras.models.clone_model(self.ValueFn.finalModel)
+			
 
 			
 			if (epState%3==0):
@@ -154,9 +156,11 @@ class SAC:
 				self.qOpt.apply_gradients(zip(QGradient, self.QSample.finalModel.trainable_variables))
 			else:
 				print("vVal")
+				ValOldGrad = tf.keras.models.clone_model(self.ValueFn.finalModel)
 				self.vOpt.apply_gradients(zip(ValGradient, self.ValueFn.finalModel.trainable_variables))
+				self.softUpdate(locModel=ValOldGrad, tagModel =self.ValueFn.finalModel)
 			# ## update the gradient of value function 
 			# #TODO : check if its pointer based or you need to use deepcopy to initialize valOldGrad
-			# self.softUpdate(locModel=valOldGrad, tagModel =self.ValueFn.finalModel)
+			
 
 			return lossPolicy,lossQValue,lossVvalue

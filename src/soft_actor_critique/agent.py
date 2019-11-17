@@ -159,7 +159,7 @@ class Policy(object):
 
 	def lgOfPolicy(self,meanDict,varLogDict,actionDict):
 		## calculating the log of the policy for given parameter
-		logVal = 100.0 
+		logVal = 0.0 
 		for i,name in enumerate(ordLayProcs):
 			mean = meanDict["mean"][name]
 			varLog = varLogDict["varLog"][name]
@@ -176,7 +176,7 @@ class Policy(object):
 			# print(newVal)
 			###################################################BUG : fixed ########################################
 			
-			print(logVal,newVal.shape)
+			# print(logVal,newVal.shape)
 			if tf.math.is_nan(logVal):
 				print(newVal)
 				print("mean : ",mean)
@@ -186,8 +186,8 @@ class Policy(object):
 		    #logValReturn =tf.math.maximum(logVal,tf.constant(-1e10, tf.float32))
 			###############################################################################################
 		
-		print("logVal : ", logVal)
-		return logVal
+		print("logVal : ", tf.math.log(logVal))
+		return tf.math.log(logVal)
 	def policyLearn(self):
 		## function for training the models 
 		pass
