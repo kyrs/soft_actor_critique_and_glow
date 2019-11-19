@@ -117,7 +117,7 @@ class Policy(object):
 
 			newValDist = tfp.distributions.Normal(loc =meanOut,scale=tf.pow(varOut,2))
 
-			action = newValDist.sample()
+			action = tf.keras.activations.tanh(newValDist.sample()) ## tanh is part of action sample
 			prob = newValDist.prob(action)
 			actionList.append(action)			
 
@@ -173,21 +173,13 @@ class Policy(object):
 			## TODO : there is some problem with 4X4X4 filter
 			newVal = tf.ones_like(val)+val
 			logVal+=tf.reduce_sum(tf.math.log(newVal))
-			# print(newVal)
-			###################################################BUG : fixed ########################################
-			
-			# print(logVal,newVal.shape)
 			if tf.math.is_nan(logVal):
 				print(newVal)
 				print("mean : ",mean)
 				print("varLog : ",tf.sqrt(tf.exp(varLog)) )
 				input()
-			### ask sir : about log cliping ####
-		    #logValReturn =tf.math.maximum(logVal,tf.constant(-1e10, tf.float32))
-			###############################################################################################
 		
-		print("logVal : ", tf.math.log(logVal))
-		return tf.math.log(logVal)
+		return logVal
 	def policyLearn(self):
 		## function for training the models 
 		pass

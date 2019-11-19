@@ -3,8 +3,9 @@ __author__ : Kumar shubham
 __desc__   : code for storing the information about the interaction
 __date__   : 26-10-2019
 written in tf2.0
-"""
 
+"""
+#TAG : CHECKED 
 from collections import deque,namedtuple
 import random 
 

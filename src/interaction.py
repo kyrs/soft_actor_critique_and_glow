@@ -36,6 +36,7 @@ def fillReplayBuffer(count,rplObj,policyObj,currentState):
 	policyObj : policy object buffer
 	currentState : current state to start with 
 	"""
+	epsReward=0
 	while(count):
 		### TODO : CHANCE OF BUGS TO CREEP IN
 		count= count-1
@@ -66,6 +67,9 @@ def fillReplayBuffer(count,rplObj,policyObj,currentState):
 			bufOut = rplObj.sample(1)
 			currentState=bufOut[0].state
 
+		epsReward+=r
+	return epsReward
+
 def sampleCeleba(celebaCsvPath="/mnt/hdd1/shubham/thesis1/dataset/celeba/list_eval_partition.csv",idx=0,celebaImgDir="/mnt/hdd1/shubham/thesis1/dataset/celeba/img_align_celeba/img_align_celeba"):
 	## csvDir : director with CSV data 
 	## idx  : to choose train test or val data
@@ -81,14 +85,14 @@ def sampleCeleba(celebaCsvPath="/mnt/hdd1/shubham/thesis1/dataset/celeba/list_ev
 	return currentState
 
 def main():
-	obj = SAC(epoch=5,batchTr=200,batchVal=200,gamma=0.1,optimizer="adaGrad",modelName="abcd",logDir="../logs",lr=0.00001,TAU=0.9)
+	obj = SAC(epoch=5,batchTr=200,batchVal=200,gamma=0.1,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.00001,TAU=0.9)
 	RplBuf = ReplayBuffer(maxlen=1000,seed=100)
 	NOEPISODE = 10000
 	EPISODELEN=50
 	
 	######## Fill the replayBuffer ###############
 	currentState = sampleCeleba()
-	fillReplayBuffer(count=10,rplObj=RplBuf,policyObj=obj,currentState=currentState)
+	cummEpsReward = fillReplayBuffer(count=10,rplObj=RplBuf,policyObj=obj,currentState=currentState)
 	#############################################	
 	### STARTING THE TRAINING ##
 
@@ -106,12 +110,13 @@ def main():
 			r = bufOut[0].reward
 			newState = bufOut[0].next_state
 			done = bufOut[0].done
-
-			lossPolicy,lossQValue,lossVvalue = obj.train(epState=step,batchState=currentState,batchAction=action,batchReward=r,batchNextState=newState)
+			 
+			lossPolicy,lossQValue,lossVvalue = obj.train(epState=step,batchState=currentState,batchAction=action,batchReward=r,batchNextState=newState,DONE=done)
 			print ("EPISODE NO : {:4d}  STEP NO : {:4d} POLICY LOSS : {:2f} QValLOSS : {:2f} VvalLOSS : {:2f}".format(eps,step,lossPolicy,lossQValue,lossVvalue))
 			######## Fill the replayBuffer ###############
 		currentState = sampleCeleba()
-		fillReplayBuffer(count=1000,rplObj=RplBuf,policyObj=obj,currentState=currentState)
+		cummEpsReward= fillReplayBuffer(count=10,rplObj=RplBuf,policyObj=obj,currentState=currentState)
+		obj.loggingReward(cummEpsReward,eps)
 		#############################################	
 
 if __name__ =="__main__":

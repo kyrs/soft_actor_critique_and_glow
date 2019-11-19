@@ -13,9 +13,10 @@ import os
 import tensorflow as tf 
 import tensorflow_probability as tfp
 import copy
+import tensorflow_addons as tfa
 
 class SAC:
-	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,modelName,logDir,lr,TAU):
+	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.4):
 		
 		self.epoch = epoch
 		self.gamma = gamma
@@ -28,12 +29,14 @@ class SAC:
 		self.ckptDir = os.path.join(self.logDir,self.modelName+"_ckpt")
 		self.lr = lr
 		self.TAU = TAU
-
+		self.ALPHA=ALPHA
+		### implementation of polyak averaging
+		# self.avg = tf.train.ExponentialMovingAverage(decay = self.TAU)
 		OPTIMIZER= {
-		"sgd": tf.keras.optimizers.SGD(learning_rate=self.lr,clipvalue=0.5),
-		"Adam" : tf.keras.optimizers.Adam(learning_rate=self.lr,clipvalue=0.5),
-		"rmsProp" : tf.keras.optimizers.RMSprop(learning_rate=self.lr,clipvalue=0.5),
-		"adaGrad" : tf.keras.optimizers.Adagrad(learning_rate=self.lr,clipvalue=0.5)
+		"sgd": tf.keras.optimizers.SGD(learning_rate=self.lr),
+		"Adam" : tf.keras.optimizers.Adam(learning_rate=self.lr),
+		"rmsProp" : tf.keras.optimizers.RMSprop(learning_rate=self.lr),
+		"adaGrad" : tf.keras.optimizers.Adagrad(learning_rate=self.lr)
 
 		}
 		LOSS = {
@@ -43,13 +46,13 @@ class SAC:
 
 		self.polOpt = OPTIMIZER[optimizer]
 		self.qOpt   = OPTIMIZER[optimizer]
-		self.vOpt   = OPTIMIZER[optimizer]
-
+		# self.vOpt   = tfa.optimizers.MovingAverage(OPTIMIZER[optimizer],average_decay=self.TAU)
+		self.vOpt = OPTIMIZER[optimizer]
 
 		####### network definition #############
 		self.policy = Policy()
-		self.QTarget = QValFn()
-		self.QSample =QValFn()
+		self.QSample2 = QValFn()
+		self.QSample1 =QValFn() #https://spinningup.openai.com/en/latest/algorithms/sac.html
 		self.ValueFn = ValFn()
 
 
@@ -59,16 +62,17 @@ class SAC:
 		self.global_step =  tf.compat.v1.train.get_or_create_global_step()
 
 	def policyLoss(self,currentState):
+		## CHECKED
 		## define loss function for policy function
-		# action = self.policy.samplePolicy(currentState,training=True)
-		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=True)
-		# print ("policy Calc calculation :", mean["mean"]["enc_eps_5"])
-		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action)) 
-		# print(action["action"])
-		qVal = self.QSample.QvalForward(currentState,action,training=False)
-		policyLossOp = tf.reduce_sum(logPolicy-qVal)
+		## TODO : FORMULATION DOESN"T MATCH THE PAPER 
+		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=True) ## TODO : CHECK THE ORDER FROM POLICY NETWORK
+		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action))  ## TODO : check implementation here also 
+		qVal = self.QSample1.QvalForward(currentState,action,training=False)
+		policyLossOp = tf.reduce_mean(self.ALPHA*logPolicy-qVal)
 		return policyLossOp
-	def qValLoss(self,currentState,action,reward,nextState):
+	def qValLoss(self,Qnetwork,currentState,action,reward,nextState,DONE):
+
+		## CHECKED 
 
 		#### NOTE function calculation depend on two key state and action  make sure they are consistent####
 		# part of TODO ^^^
@@ -77,31 +81,27 @@ class SAC:
 		#UPDATE : added few changes in Policy return to be consistent with value and Q function 
 
 		vValNext = self.ValueFn.ValFnForward(nextState,training=False)
-		qVal= self.QSample.QvalForward(currentState,action,training=True) ## stochastic sampling of state
-		qTarget = reward + self.gamma*vValNext ## Question why not use QTarget instead of QVal
+		qVal = Qnetwork.QvalForward(currentState,action,training=True) ## stochastic sampling of state 
+		qTarget = reward + self.gamma*(1-DONE)*vValNext ## Question why not use QTarget instead of QVal
 		
-		loss = tf.reduce_sum(0.5*tf.pow((qVal-qTarget),2)) ## loss is explicitly defined for q based gradient  not for value function
+		loss = tf.reduce_mean(tf.pow((qVal-qTarget),2)) ## loss is explicitly defined for q based gradient  not for value function
 		return loss 
 
-	def vValLoss(self,currentState,action):
+	def vValLoss(self,currentState):
+		### Checked 
 		## define loss function for value function
-
+		#### https://spinningup.openai.com/en/latest/algorithms/sac.html
 		value = self.ValueFn.ValFnForward(currentState,training=True)
-		_,_,_,mean,varLog = self.policy.samplePolicy(currentState,training=False)
-		qVal =  self.QSample.QvalForward(currentState,action,training=False)
-		# print ("vavalue calculation :", mean["mean"]["enc_eps_5"]) 
+		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=False) ## TODO : check the order 
+		qVal1 =  self.QSample1.QvalForward(currentState,action,training=False)
+		qVal2 = self.QSample2.QvalForward(currentState,action,training=False)
+		qVal = tf.math.minimum(qVal1,qVal2)
 		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action))
-		softValue = tf.reduce_sum(qVal-logPolicy)
-		
-		return tf.reduce_sum(0.5*tf.pow((value-softValue),2))
+		softValue = tf.reduce_sum(qVal-self.ALPHA*logPolicy)
+		##TODO : POLYAK averaging
+		return tf.reduce_mean(tf.pow((value-softValue),2))
 
-	def flipQVal(self):
-		## change the Q value from target to Sample
-		#TODO : check if it is working or not 
-		varName = [v.name for v in self.QSample.trainable_variables]
-		for name in varName:
-			self.QSample.trainable_variables[name] = self.target.trainable_variables[name]
-		return 
+	 
 		
 
 	def softUpdate(self,locModel,tagModel):
@@ -119,48 +119,57 @@ class SAC:
 		return
 
 
+	def loggingQLoss(self,loss,step):
+		tf.summary.experimental.set_step(step)
+		tf.compat.v2.summary.scalar('qvalue_loss', tf.math.log(loss))
+	def loggingVLoss(self,loss,step):
+		tf.summary.experimental.set_step(step)
+		tf.compat.v2.summary.scalar('Vvalue_loss', tf.math.log(loss))
+	def loggingPLoss(self,loss,step):
+		tf.summary.experimental.set_step(step)
+		tf.compat.v2.summary.scalar('policy_loss', tf.math.log(loss))
+
+	def loggingReward(self,reward,step):
+		tf.summary.experimental.set_step(step)
+		tf.compat.v2.summary.scalar('reward', reward)
 
 
-	def train(self,epState,batchState,batchReward,batchAction,batchNextState):
+	def train(self,epState,batchState,batchReward,batchAction,batchNextState,DONE):
 		# print(self.policy.finalModel.summary())
 		# input()
 		with tf.GradientTape(persistent=True) as tape:
 			## training the model
-			# TODO 
-			##################### code for data queue ###################
-			# batchState,batchReward,batchAction,batchNextState = 
-			#############################################################
-
-			lossPolicy = self.policyLoss(batchState)
-			lossQValue = self.qValLoss(batchState,batchAction,batchReward,batchNextState)
-			lossVvalue = self.vValLoss(batchState,batchAction)
-
-			#TODO : modofy the policy model
-			policyGradient = tape.gradient(lossPolicy,self.policy.finalModel.trainable_variables)
-			QGradient = tape.gradient(lossQValue,self.QSample.finalModel.trainable_variables)
-			ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
-
-			
-			
+			## ttrick to fit model on smaller GPU
 
 			
 			if (epState%3==0):
 				############# ask GSR : better way of regularization ################
-				print("policy")
-				print (lossPolicy)
-				# print("trainVar",self.policy.finalModel.trainable_variables)
-				# print("gradient",policyGradient)
+				lossPolicy = self.policyLoss(batchState)
+				#TODO : modofy the policy model
+				policyGradient = tape.gradient(lossPolicy,self.policy.finalModel.trainable_variables)
 				self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
+				self.loggingPLoss(lossPolicy,epState//3)
+				return lossPolicy,0.0,0.0
 			elif(epState%3==1):
-				print("qOpt")
-				self.qOpt.apply_gradients(zip(QGradient, self.QSample.finalModel.trainable_variables))
+				countQNet=epState//2
+
+				if countQNet%2==0:
+					Qnetwork=self.QSample1
+					strQ=1
+				else:
+					Qnetwork=self.QSample2
+					strQ=2
+				print("qOpt : ",strQ,countQNet)
+				lossQValue = self.qValLoss(Qnetwork,batchState,batchAction,batchReward,batchNextState,DONE)
+				QGradient = tape.gradient(lossQValue,Qnetwork.finalModel.trainable_variables)
+				self.qOpt.apply_gradients(zip(QGradient, Qnetwork.finalModel.trainable_variables))
+				self.loggingQLoss (lossQValue,epState//3)
+				return 0.0,lossQValue,0.0
 			else:
 				print("vVal")
-				ValOldGrad = tf.keras.models.clone_model(self.ValueFn.finalModel)
+				lossVvalue = self.vValLoss(batchState)
+				ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
+				self.loggingVLoss (lossVvalue,epState//3)
 				self.vOpt.apply_gradients(zip(ValGradient, self.ValueFn.finalModel.trainable_variables))
-				self.softUpdate(locModel=ValOldGrad, tagModel =self.ValueFn.finalModel)
-			# ## update the gradient of value function 
-			# #TODO : check if its pointer based or you need to use deepcopy to initialize valOldGrad
-			
-
-			return lossPolicy,lossQValue,lossVvalue
+				return 0.0,0.0,lossVvalue
+				
