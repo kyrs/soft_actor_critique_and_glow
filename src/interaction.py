@@ -18,8 +18,8 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "1"
  6. saving the log file and saving the model
  7. optimal rewards value
  8. Doubt about the log normal exploding : tensor mathematics : ask GSR 
- 9. tensorboard
- 10: logging
+ 9. tensorboard -- DONE
+ 10: logging -- DONE
 """
 
 sys.path.insert(0,"./soft_actor_critique")
