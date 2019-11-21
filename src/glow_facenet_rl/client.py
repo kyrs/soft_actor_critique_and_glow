@@ -61,7 +61,7 @@ def encoderVec(imagePath):
 	outDict=recieve_numpy_network(outDict)
 	return outDict
 
-def reward(outDict=[],LAMBDA=10000,DistUp=10000):
+def reward(outDict=[],LAMBDA=100000,DistUp=10000):
 	## TODO : FIRST FLASK CALL TAKES SOME TIME 
 	## TODO : EUCD DISTANCE IS NOT ZERO ( for some reason could be stochasticity in glow)
 	## dictionary with the key value wuth corresponding keyname and value 
@@ -82,16 +82,22 @@ def reward(outDict=[],LAMBDA=10000,DistUp=10000):
 	outDict = json.loads(reward.content)
 	
 
-	##TODO : define reward functions
-	if len(outDict["facenet"][0])==1 and outDict["eucd"][0][0] <5000 :
-		return -100,outDict["eucd"][0][0],False
-	elif len(outDict["facenet"][0])==1 and outDict["eucd"][0][0] >5000 :
-		return -100*np.log(outDict["eucd"][0][0]),outDict["eucd"][0][0],False 
+	##TODO : reward over matching faces functions
+	# if len(outDict["facenet"][0])==1 and outDict["eucd"][0][0] <5000 :
+	# 	return -100*np.log(outDict["eucd"][0][0]),outDict["eucd"][0][0],False
+	# elif len(outDict["facenet"][0])==1 and outDict["eucd"][0][0] >5000 :
+	# 	return -100*np.log(outDict["eucd"][0][0]),outDict["eucd"][0][0],False 
 
-	if outDict["eucd"][0][0]<100:
-		return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],True
+	# if outDict["eucd"][0][0]<100:
+	# 	return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],True
+	# else:
+	# 	return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],False
+
+	if len(outDict["facenet"][0])==1:
+		return 0.0,0.0,False
 	else:
-		return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],False
+		return 200,0.0,False
+
 
 if __name__ =="__main__":
 	reward()

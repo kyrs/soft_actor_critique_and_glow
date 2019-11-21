@@ -8,12 +8,14 @@ from agent import Policy,QValFn,ValFn
  
 
 
+
 # import agent
 import os 
 import tensorflow as tf 
 import tensorflow_probability as tfp
 import copy
 import tensorflow_addons as tfa
+tf.debugging.set_log_device_placement(True)
 
 class SAC:
 	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.4):
@@ -46,8 +48,8 @@ class SAC:
 
 		self.polOpt = OPTIMIZER[optimizer]
 		self.qOpt   = OPTIMIZER[optimizer]
-		# self.vOpt   = tfa.optimizers.MovingAverage(OPTIMIZER[optimizer],average_decay=self.TAU)
-		self.vOpt = OPTIMIZER[optimizer]
+		self.vOpt   = tfa.optimizers.MovingAverage(OPTIMIZER[optimizer],average_decay=self.TAU)
+		# self.vOpt = OPTIMIZER[optimizer]
 
 		####### network definition #############
 		self.policy = Policy()
@@ -137,39 +139,45 @@ class SAC:
 	def train(self,epState,batchState,batchReward,batchAction,batchNextState,DONE):
 		# print(self.policy.finalModel.summary())
 		# input()
-		with tf.GradientTape(persistent=True) as tape:
+		
 			## training the model
 			## ttrick to fit model on smaller GPU
 
 			
 			if (epState%3==0):
 				############# ask GSR : better way of regularization ################
-				lossPolicy = self.policyLoss(batchState)
-				#TODO : modofy the policy model
-				policyGradient = tape.gradient(lossPolicy,self.policy.finalModel.trainable_variables)
-				self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
-				self.loggingPLoss(lossPolicy,epState//3)
-				return lossPolicy,0.0,0.0
+				# with tf.device('/device:GPU:1'):
+				with tf.GradientTape() as Ptape:
+					lossPolicy = self.policyLoss(batchState)
+					#TODO : modofy the policy model
+					policyGradient = Ptape.gradient(lossPolicy,self.policy.finalModel.trainable_variables)
+					self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
+					self.loggingPLoss(lossPolicy,epState//3)
+					return lossPolicy,0.0,0.0
 			elif(epState%3==1):
-				countQNet=epState//2
+				# with tf.device('/device:GPU:1'):
+				with tf.GradientTape() as Qtape:
+					countQNet=epState//2
 
-				if countQNet%2==0:
-					Qnetwork=self.QSample1
-					strQ=1
-				else:
-					Qnetwork=self.QSample2
-					strQ=2
-				print("qOpt : ",strQ,countQNet)
-				lossQValue = self.qValLoss(Qnetwork,batchState,batchAction,batchReward,batchNextState,DONE)
-				QGradient = tape.gradient(lossQValue,Qnetwork.finalModel.trainable_variables)
-				self.qOpt.apply_gradients(zip(QGradient, Qnetwork.finalModel.trainable_variables))
-				self.loggingQLoss (lossQValue,epState//3)
-				return 0.0,lossQValue,0.0
+					if countQNet%2==0:
+						Qnetwork=self.QSample1
+						strQ=1
+					else:
+						Qnetwork=self.QSample2
+						strQ=2
+					print("qOpt : ",strQ,countQNet)
+					lossQValue = self.qValLoss(Qnetwork,batchState,batchAction,batchReward,batchNextState,DONE)
+					QGradient = Qtape.gradient(lossQValue,Qnetwork.finalModel.trainable_variables)
+					self.qOpt.apply_gradients(zip(QGradient, Qnetwork.finalModel.trainable_variables))
+					self.loggingQLoss (lossQValue,epState//3)
+					return 0.0,lossQValue,0.0
 			else:
 				print("vVal")
-				lossVvalue = self.vValLoss(batchState)
-				ValGradient = tape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
-				self.loggingVLoss (lossVvalue,epState//3)
-				self.vOpt.apply_gradients(zip(ValGradient, self.ValueFn.finalModel.trainable_variables))
-				return 0.0,0.0,lossVvalue
-				
+				# with tf.device('/device:CPU:0'):
+				with tf.GradientTape() as ValueTape:
+					lossVvalue = self.vValLoss(batchState)
+					ValGradient = ValueTape.gradient(lossVvalue,self.ValueFn.finalModel.trainable_variables)
+					self.loggingVLoss(lossVvalue,epState//3)
+					self.vOpt.apply_gradients(zip(ValGradient, self.ValueFn.finalModel.trainable_variables))
+					return 0.0,0.0,lossVvalue
+						

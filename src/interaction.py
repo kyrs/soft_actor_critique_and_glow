@@ -7,7 +7,8 @@ __date__   : 11-11-2019
 import sys
 import os 
 import tensorflow as tf
-os.environ["CUDA_VISIBLE_DEVICES"] = "1" 
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "1,0" 
 """
 ## TODO : 
  1. reward based code --done
@@ -53,7 +54,7 @@ def fillReplayBuffer(count,rplObj,policyObj,currentState):
 			r = -1e4
 			done=False
 			newState=currentState
-		print(r),print(done)
+		print(r),print(done),print(count)
 
 		rplObj.add(currentState,action,r,newState,done)
 		currentState=newState
@@ -85,22 +86,26 @@ def sampleCeleba(celebaCsvPath="/mnt/hdd1/shubham/thesis1/dataset/celeba/list_ev
 	return currentState
 
 def main():
-	obj = SAC(epoch=5,batchTr=200,batchVal=200,gamma=0.1,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.00001,TAU=0.9)
-	RplBuf = ReplayBuffer(maxlen=1000,seed=100)
+	maxLen = 1000
+	obj = SAC(epoch=5,batchTr=200,batchVal=200,gamma=0.9,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.0001,TAU=0.9)
+	RplBuf = ReplayBuffer(maxlen=maxLen,seed=100)
 	NOEPISODE = 10000
-	EPISODELEN=50
+	
 	
 	######## Fill the replayBuffer ###############
 	currentState = sampleCeleba()
-	cummEpsReward = fillReplayBuffer(count=10,rplObj=RplBuf,policyObj=obj,currentState=currentState)
+	cummEpsReward = fillReplayBuffer(count=50,rplObj=RplBuf,policyObj=obj,currentState=currentState)
 	#############################################	
 	### STARTING THE TRAINING ##
 
 	eps = 0
+	step =1
+	
 	while (eps<NOEPISODE):
 		eps+=1
-		step =0
-		while(step<EPISODELEN):
+		EPISODELEN = min(len(RplBuf),maxLen)*10	
+		# EPISODELEN=200
+		while((step%EPISODELEN)!=0):
 			step+=1
 			### stochastic gradient descent
 			bufOut = RplBuf.sample(1)
@@ -113,11 +118,15 @@ def main():
 			 
 			lossPolicy,lossQValue,lossVvalue = obj.train(epState=step,batchState=currentState,batchAction=action,batchReward=r,batchNextState=newState,DONE=done)
 			print ("EPISODE NO : {:4d}  STEP NO : {:4d} POLICY LOSS : {:2f} QValLOSS : {:2f} VvalLOSS : {:2f}".format(eps,step,lossPolicy,lossQValue,lossVvalue))
+			
+
 			######## Fill the replayBuffer ###############
+		
 		currentState = sampleCeleba()
-		cummEpsReward= fillReplayBuffer(count=10,rplObj=RplBuf,policyObj=obj,currentState=currentState)
+		cummEpsReward= fillReplayBuffer(count=50,rplObj=RplBuf,policyObj=obj,currentState=currentState)
 		obj.loggingReward(cummEpsReward,eps)
 		#############################################	
 
 if __name__ =="__main__":
 	main()
+	# print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
