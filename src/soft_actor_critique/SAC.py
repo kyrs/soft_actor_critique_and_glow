@@ -15,15 +15,12 @@ import tensorflow as tf
 import tensorflow_probability as tfp
 import copy
 import tensorflow_addons as tfa
-tf.debugging.set_log_device_placement(True)
+# tf.debugging.set_log_device_placement(True)
 
 class SAC:
-	def __init__(self,epoch,batchTr,batchVal,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.4):
+	def __init__(self,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.2):
 		
-		self.epoch = epoch
 		self.gamma = gamma
-		self.batchTr =  batchTr
-		self.batchVal = batchVal
 		self.opt = optimizer
 		self.modelName = modelName
 		self.logDir = logDir
@@ -46,9 +43,9 @@ class SAC:
 		"mse"   : tf.keras.losses.MSE,
 		} 
 
-		self.polOpt = OPTIMIZER[optimizer]
-		self.qOpt   = OPTIMIZER[optimizer]
-		self.vOpt   = tfa.optimizers.MovingAverage(OPTIMIZER[optimizer],average_decay=self.TAU)
+		self.polOpt = OPTIMIZER[self.opt]
+		self.qOpt   = OPTIMIZER[self.opt]
+		self.vOpt   = tfa.optimizers.MovingAverage(OPTIMIZER[self.opt],average_decay=self.TAU)
 		# self.vOpt = OPTIMIZER[optimizer]
 
 		####### network definition #############
@@ -67,10 +64,10 @@ class SAC:
 		## CHECKED
 		## define loss function for policy function
 		## TODO : FORMULATION DOESN"T MATCH THE PAPER 
-		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=True) ## TODO : CHECK THE ORDER FROM POLICY NETWORK
-		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action))  ## TODO : check implementation here also 
+		_,_,action,mean,sqrtStd,gauss,rewardAction = self.policy.samplePolicy(currentState,training=True) ## TODO : CHECK THE ORDER FROM POLICY NETWORK
+		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,sqrtStd,gauss))  ## TODO : check implementation here also 
 		qVal = self.QSample1.QvalForward(currentState,action,training=False)
-		policyLossOp = tf.reduce_mean(self.ALPHA*logPolicy-qVal)
+		policyLossOp = tf.reduce_mean(tf.abs(self.ALPHA*logPolicy-qVal))
 		return policyLossOp
 	def qValLoss(self,Qnetwork,currentState,action,reward,nextState,DONE):
 
@@ -94,11 +91,11 @@ class SAC:
 		## define loss function for value function
 		#### https://spinningup.openai.com/en/latest/algorithms/sac.html
 		value = self.ValueFn.ValFnForward(currentState,training=True)
-		_,_,action,mean,varLog = self.policy.samplePolicy(currentState,training=False) ## TODO : check the order 
+		_,_,action,mean,sqrtStd,gauss,rewardAction = self.policy.samplePolicy(currentState,training=False) ## TODO : check the order 
 		qVal1 =  self.QSample1.QvalForward(currentState,action,training=False)
 		qVal2 = self.QSample2.QvalForward(currentState,action,training=False)
 		qVal = tf.math.minimum(qVal1,qVal2)
-		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,varLog,action))
+		logPolicy = tf.stop_gradient(self.policy.lgOfPolicy(mean,sqrtStd,gauss))
 		softValue = tf.reduce_sum(qVal-self.ALPHA*logPolicy)
 		##TODO : POLYAK averaging
 		return tf.reduce_mean(tf.pow((value-softValue),2))

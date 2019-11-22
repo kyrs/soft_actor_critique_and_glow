@@ -96,7 +96,7 @@ def reward(outDict=[],LAMBDA=100000,DistUp=10000):
 	if len(outDict["facenet"][0])==1:
 		return 0.0,0.0,False
 	else:
-		return 200,0.0,False
+		return 100,0.0,False
 
 
 if __name__ =="__main__":

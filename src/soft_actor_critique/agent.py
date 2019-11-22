@@ -103,26 +103,29 @@ class Policy(object):
 
 		## list of the output (action for each individual element)
 		meanOutList = []
-		logVarOutList = []
+		sqrtStdList = []
 		outputList = []
 		actionList = []
+		gausSampleList = []
 		for model,inputState in zip(modelList,inputList):
 			mean,var = model
 			meanOut  = mean(inputState)
-			varOut   = var(inputState)
+			sqrtStd   = var(inputState)
 
-			logVarOutList.append(varOut)
+			sqrtStdList.append(sqrtStd)
 			meanOutList.append(meanOut)
 			
 
-			newValDist = tfp.distributions.Normal(loc =meanOut,scale=tf.pow(varOut,2))
+			newValDist = tfp.distributions.Normal(loc =meanOut,scale=tf.pow(sqrtStd,2))
 
-			action = tf.keras.activations.tanh(newValDist.sample()) ## tanh is part of action sample
+			gausSample = newValDist.sample()
+			action = tf.keras.activations.tanh(gausSample) ## tanh is part of action sample
+			gausSampleList.append(gausSample)
 			prob = newValDist.prob(action)
 			actionList.append(action)			
 
 
-		outputList  = [actionList,meanOutList,logVarOutList] ## appending the list of all output tensor
+		outputList  = [actionList,meanOutList,sqrtStdList,gausSampleList] ## appending the list of all output tensor
 		finalModel  = tf.keras.Model(inputs=inputList,outputs=outputList)
 		return finalModel
 		
@@ -141,42 +144,41 @@ class Policy(object):
 		state  = {"states":{}}
 		newState = {"states":{}}
 		mean = {"mean":{}}
-		varLog = {"varLog":{}}
+		sqrtStd = {"sqrtStd":{}}
+		actionGauss = {"gauss":{}}
+		rewardAction = {"rewardAction":{}}
 
 		crtInput = [inputDict["states"][elm] for elm in ordLayProcs]
 
-		actionOut,meanOut,varOut = self.finalModel(crtInput,training=training)
-		for newVal,meanMat,varLogMat,layerValue,layerName in zip(actionOut,meanOut,varOut,crtInput,ordLayProcs):
+		actionOut,meanOut,sqrtStdOut,gaussOut = self.finalModel(crtInput,training=training)
+		for newVal,meanMat,sqrtStdMat,layerValue,gaussMat,layerName in zip(actionOut,meanOut,sqrtStdOut,crtInput,gaussOut,ordLayProcs):
 			
 			newState["states"][layerName] = layerValue+newVal
 			action["action"][layerName] = newVal
 			state["states"][layerName] = layerValue
 			mean["mean"][layerName] = meanMat
-			varLog["varLog"][layerName] = varLogMat
-
+			sqrtStd["sqrtStd"][layerName] = sqrtStdMat
+			actionGauss["gauss"][layerName] = gaussMat
+			rewardAction["rewardAction"][layerName] = layerValue + tf.math.tanh(meanMat)
 		
-		return (newState,state,action,mean,varLog)
+		return (newState,state,action,mean,sqrtStd,actionGauss,rewardAction)
 
-	def lgOfPolicy(self,meanDict,varLogDict,actionDict):
+	def lgOfPolicy(self,meanDict,sqrtStdDict,actGaussDict):
 		## calculating the log of the policy for given parameter
 		logVal = 0.0 
 		for i,name in enumerate(ordLayProcs):
 			mean = meanDict["mean"][name]
-			varLog = varLogDict["varLog"][name]
-			action = actionDict["action"][name]
-			## TODO : DOUBT ABOUT THE CALCULATION OF THE VAL (tensorflow.python.framework.errors_impl.InvalidArgumentError:
-			## Incompatible shapes: [1,128,128,6] vs. [1,64,64,12] [Op:AddV2] name: add/)
-			val = tfp.distributions.Normal(loc=mean,scale = tf.pow(varLog,2),allow_nan_stats=False).prob(action)
-			## TODO : Very bah hack of using the log here 
-			#https://stackoverflow.com/questions/10343831/clamping-negative-logarithm-of-the-probability-to-a-positive-value-in-a-informat
+			sqrtStd = sqrtStdDict["sqrtStd"][name]
+			gauss = actGaussDict["gauss"][name] ## TODO : check the mathematics 
+			val = tfp.distributions.Normal(loc=mean,scale = tf.pow(sqrtStd,2),allow_nan_stats=False).prob(gauss)
+			changeInVar = 1-tf.pow(tf.math.tanh(mean),2)
+			logVal+=(tf.reduce_sum(tf.math.log(val))+tf.reduce_sum(tf.math.log(changeInVar)))
 
-			## TODO : there is some problem with 4X4X4 filter
-			newVal = tf.ones_like(val)+val
-			logVal+=tf.reduce_sum(tf.math.log(newVal))
+
+			## see appendix of paper for calculating log likelihood
+
 			if tf.math.is_nan(logVal):
 				print(newVal)
-				print("mean : ",mean)
-				print("varLog : ",tf.sqrt(tf.exp(varLog)) )
 				input()
 		
 		return logVal
