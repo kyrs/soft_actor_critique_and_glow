@@ -79,7 +79,7 @@ class Policy(object):
 			if dropout:
 				varApprox.add(tf.keras.Dropout(drop_ratio))
 
-			#varApprox.add(tf.keras.layers.RelU())
+			varApprox.add(tf.keras.layers.RelU())
 
 		varModelOut = varApprox(inputLayer)
 		## defining the output model of the mean vector
@@ -121,7 +121,6 @@ class Policy(object):
 			gausSample = newValDist.sample()
 			action = tf.keras.activations.tanh(gausSample) ## tanh is part of action sample
 			gausSampleList.append(gausSample)
-			prob = newValDist.prob(action)
 			actionList.append(action)			
 
 
@@ -172,13 +171,13 @@ class Policy(object):
 			gauss = actGaussDict["gauss"][name] ## TODO : check the mathematics 
 			val = tfp.distributions.Normal(loc=mean,scale = tf.pow(sqrtStd,2),allow_nan_stats=False).prob(gauss)
 			changeInVar = 1-tf.pow(tf.math.tanh(mean),2)
-			logVal+=(tf.reduce_sum(tf.math.log(val))+tf.reduce_sum(tf.math.log(changeInVar)))
+			logVal+=(tf.reduce_sum(tf.math.log(val))-tf.reduce_sum(tf.math.log(1e-6+changeInVar)))
 
 
 			## see appendix of paper for calculating log likelihood
 
+			print (logVal,tf.reduce_sum(tf.math.log(val),),tf.reduce_sum(tf.math.log(changeInVar)))
 			if tf.math.is_nan(logVal):
-				print(newVal)
 				input()
 		
 		return logVal
@@ -302,8 +301,7 @@ class QValFn(object):
 		"""
 		modelInp = []
 		for i,name in enumerate(ordLayProcs):
-			modelInp.append(state["states"][name])
-			modelInp.append(action["action"][name])
+			modelInp.append((state["states"][name],action["action"][name]))
 
 		return self.finalModel(modelInp,training=training)
 
@@ -368,7 +366,7 @@ class ValFn(object):
 		concatOut = []
 		for model,outTensor in zip(modelList,inputList):
 			state = outTensor
-			output = model([state])
+			output = model(state)
 			concatOut.append(output)
 
 		concatOut = tf.keras.layers.Concatenate()(concatOut)

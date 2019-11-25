@@ -94,9 +94,9 @@ def reward(outDict=[],LAMBDA=100000,DistUp=10000):
 	# 	return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],False
 
 	if len(outDict["facenet"][0])==1:
-		return 0.0,0.0,False
+		return -np.log(outDict["eucd"][0][0])/np.log(10),0.0,0
 	else:
-		return 100,0.0,False
+		return 100-(np.log(outDict["eucd"][0][0])/np.log(10))/10.0,0.0,0.0
 
 
 if __name__ =="__main__":

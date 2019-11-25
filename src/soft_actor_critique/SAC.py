@@ -18,7 +18,7 @@ import tensorflow_addons as tfa
 # tf.debugging.set_log_device_placement(True)
 
 class SAC:
-	def __init__(self,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.2):
+	def __init__(self,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.001):
 		
 		self.gamma = gamma
 		self.opt = optimizer

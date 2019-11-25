@@ -120,14 +120,14 @@ def sampleCeleba(celebaCsvPath="/mnt/hdd1/shubham/thesis1/dataset/celeba/list_ev
 	return currentState
 
 def main():
-	maxLen = 10000
-	obj = SAC(gamma=0.99,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.0004,TAU=0.95)
+	maxLen = 1000
+	obj = SAC(gamma=0.99,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.0004,TAU=0.5)
 	RplBuf = ReplayBuffer(maxlen=maxLen,seed=50)
 	NOEPISODE = 10000
 	TESTSTATE  = sampleCeleba()
 	
 	######## Fill the replayBuffer ###############
-	fillReplayBuffer(count=20,rplObj=RplBuf,policyObj=obj)
+	fillReplayBuffer(count=150,rplObj=RplBuf,policyObj=obj)
 	#############################################	
 	### STARTING THE TRAINING ##
 
@@ -138,7 +138,7 @@ def main():
 		eps+=1
 		# EPISODELEN = min(len(RplBuf),maxLen)*3
 		# print(len(RplBuf))	
-		EPISODELEN=200
+		EPISODELEN=2000
 		moduloCount = 0
 		while(moduloCount<EPISODELEN):
 			step+=1
@@ -158,8 +158,8 @@ def main():
 
 			######## Fill the replayBuffer ###############
 		
-		fillReplayBuffer(count=20,rplObj=RplBuf,policyObj=obj)
-		cumReward = calcRewardMean(20,obj,TESTSTATE)
+		fillReplayBuffer(count=150,rplObj=RplBuf,policyObj=obj)
+		cumReward = calcRewardMean(100,obj,TESTSTATE)
 		obj.loggingReward(cumReward,eps)
 		#############################################	
 
