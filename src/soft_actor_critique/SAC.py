@@ -18,7 +18,7 @@ import tensorflow_addons as tfa
 # tf.debugging.set_log_device_placement(True)
 
 class SAC:
-	def __init__(self,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.001):
+	def __init__(self,gamma,optimizer,modelName,logDir,lr,TAU,ALPHA=0.2,stepToCkpt=50000):
 		
 		self.gamma = gamma
 		self.opt = optimizer
@@ -57,9 +57,32 @@ class SAC:
 
 		############ summary Writer#############
 		self.summary_writer = tf.compat.v2.summary.create_file_writer(os.path.join(self.sumDir,'logs/'), flush_millis=10000)
+		# self.ckpt_writer = tf.compat.v2.summary.create_file_writer(os.path.join(self.sumDir,'ckpt/'), flush_millis=10000)
 		self.summary_writer.set_as_default()
 		self.global_step =  tf.compat.v1.train.get_or_create_global_step()
 
+		##### checkpoint writer ###########
+		self.ckpt = tf.train.Checkpoint(policy=self.policy.finalModel,
+                           q1=self.QSample1.finalModel,
+                           q2=self.QSample2.finalModel,
+                           value=self.ValueFn.finalModel,
+                           policyOpt=self.polOpt,
+                           qOpt=self.qOpt,
+                           vOpt=self.vOpt)
+
+		self.pathCkpt = os.path.join(self.sumDir,'ckpt')
+		self.ckptManager = tf.train.CheckpointManager(self.ckpt,self.pathCkpt , max_to_keep=3)
+
+
+		self.stepToCkpt = stepToCkpt
+
+		###### loading the latest checkpoint for the training purpose ##########
+		print (self.pathCkpt)
+		self.ckpt.restore(self.ckptManager.latest_checkpoint)
+		if self.ckptManager.latest_checkpoint:
+			print("Restored from {}".format(self.ckptManager.latest_checkpoint))
+		else:
+			print("Initializing from scratch.")
 	def policyLoss(self,currentState):
 		## CHECKED
 		## define loss function for policy function
@@ -140,7 +163,14 @@ class SAC:
 			## training the model
 			## ttrick to fit model on smaller GPU
 
-			
+
+
+
+			if ((epState+1)%self.stepToCkpt ==0):
+				self.saveModel(epState+1)
+			else:
+				pass
+
 			if (epState%3==0):
 				############# ask GSR : better way of regularization ################
 				# with tf.device('/device:GPU:1'):
@@ -150,7 +180,13 @@ class SAC:
 					policyGradient = Ptape.gradient(lossPolicy,self.policy.finalModel.trainable_variables)
 					self.polOpt.apply_gradients(zip(policyGradient, self.policy.finalModel.trainable_variables))
 					self.loggingPLoss(lossPolicy,epState//3)
+					
+
+					### assigning one step for each of the step in policy
 					return lossPolicy,0.0,0.0
+			
+
+
 			elif(epState%3==1):
 				# with tf.device('/device:GPU:1'):
 				with tf.GradientTape() as Qtape:
@@ -178,3 +214,15 @@ class SAC:
 					self.vOpt.apply_gradients(zip(ValGradient, self.ValueFn.finalModel.trainable_variables))
 					return 0.0,0.0,lossVvalue
 						
+
+			
+
+	def restoreCkpt(self):
+		## restor the ckpt 
+		self.ckpt.restore(tf.train.latest_checkpoint(self.pathCkpt))
+
+	def saveModel(self,epState):
+		## function to save the checkpoint
+			save_path = self.ckptManager.save(checkpoint_number=epState+1)
+			print("Saved checkpoint for step {}: {}".format(epState+1, save_path))
+			

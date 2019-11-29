@@ -7,6 +7,8 @@ __date__   : 11-11-2019
 import sys
 import os 
 import tensorflow as tf
+from datetime import datetime
+import shutil 
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "1,0" 
 """
@@ -36,11 +38,11 @@ def fillReplayBuffer(count,rplObj,policyObj):
 	policyObj : policy object buffer
 	currentState : current state to start with 
 	"""
-	currentState = sampleCeleba()
+	currentState,_ = sampleCeleba()
 	while(count):
 		### TODO : CHANCE OF BUGS TO CREEP IN
 		if ((count-1)%20 ==0):
-			currentState = sampleCeleba()
+			currentState,_ = sampleCeleba()
 		else:
 			pass
 		count= count-1
@@ -51,7 +53,7 @@ def fillReplayBuffer(count,rplObj,policyObj):
 		
 		print("here")
 		try:
-			r,eud,done = reward(newState["states"])  
+			r,eud,done = reward(outDict=newState["states"])  
 			if r<-1e4:
 				raise Exception("reward as infinity euclidean")
 			expFlag=False
@@ -76,12 +78,13 @@ def fillReplayBuffer(count,rplObj,policyObj):
 		
 	return 
 
-def calcRewardMean(count,policyObj,currentState):
+def calcRewardMean(count,policyObj,currentState,pathDir="",genSaveFlag=False):
 ## sample from the policy and calculate the reward with the mean value.
 	cumReward = 0
+	step = 0
 	while(count):
 		### TODO : CHANCE OF BUGS TO CREEP IN
-		
+		step+=1
 		count= count-1
 		output = policyObj.policy.samplePolicy(currentState,training=False)
 		_,_,_,_,_,_,actionState = output
@@ -90,7 +93,7 @@ def calcRewardMean(count,policyObj,currentState):
 		
 		print("here")
 		try:
-			r,eud,done = reward(actionState["rewardAction"])  
+			r,eud,done = reward(outDict = actionState["rewardAction"],genSaveFlag=genSaveFlag,pathDir=pathDir,step=step)  
 			if r<-1e4:
 				raise Exception("reward as infinity euclidean")
 			expFlag=False
@@ -117,17 +120,23 @@ def sampleCeleba(celebaCsvPath="/mnt/hdd1/shubham/thesis1/dataset/celeba/list_ev
 	imgPath = os.path.join(celebaImgDir,fileName)
 	dictofGenModel = encoderVec(imgPath)
 	currentState = {"states":dictofGenModel}
-	return currentState
+	return currentState,imgPath
 
 def main():
-	maxLen = 1000
-	obj = SAC(gamma=0.99,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.0004,TAU=0.5)
+	maxLen = 3000
+	obj = SAC(gamma=0.99,optimizer="Adam",modelName="abcd",logDir="../logs",lr=0.004,TAU=0.5)
 	RplBuf = ReplayBuffer(maxlen=maxLen,seed=50)
 	NOEPISODE = 10000
-	TESTSTATE  = sampleCeleba()
-	
+	LOGIMG =50
+	FILLBUFFER = 150
+	TESTSTATE,TESTIMG  = sampleCeleba()
+	LOGDIR = "/home/shubham/Desktop/shubham/thesis1/logs/abcd_summary/image"
+	timeStr =datetime.now().strftime("%Y_%m_%d_%H_%M")
+	saveImgPath = os.path.join(LOGDIR,timeStr)
+	os.makedirs(saveImgPath)
+	shutil.copy2(TESTIMG,saveImgPath)
 	######## Fill the replayBuffer ###############
-	fillReplayBuffer(count=150,rplObj=RplBuf,policyObj=obj)
+	fillReplayBuffer(count=FILLBUFFER,rplObj=RplBuf,policyObj=obj)
 	#############################################	
 	### STARTING THE TRAINING ##
 
@@ -138,7 +147,7 @@ def main():
 		eps+=1
 		# EPISODELEN = min(len(RplBuf),maxLen)*3
 		# print(len(RplBuf))	
-		EPISODELEN=2000
+		EPISODELEN=5000
 		moduloCount = 0
 		while(moduloCount<EPISODELEN):
 			step+=1
@@ -158,9 +167,18 @@ def main():
 
 			######## Fill the replayBuffer ###############
 		
-		fillReplayBuffer(count=150,rplObj=RplBuf,policyObj=obj)
-		cumReward = calcRewardMean(100,obj,TESTSTATE)
-		obj.loggingReward(cumReward,eps)
+		fillReplayBuffer(count=FILLBUFFER,rplObj=RplBuf,policyObj=obj)
+
+		if (eps+1)%LOGIMG==0:
+			### saving generated images
+			logImg = os.path.join(saveImgPath,str(eps))
+			os.makedirs(logImg)
+			cumReward = calcRewardMean(100,obj,TESTSTATE,logImg,1)
+			obj.loggingReward(cumReward,eps)
+		else:
+			cumReward = calcRewardMean(100,obj,TESTSTATE)
+			obj.loggingReward(cumReward,eps)
+
 		#############################################	
 
 if __name__ =="__main__":

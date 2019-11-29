@@ -61,7 +61,7 @@ def encoderVec(imagePath):
 	outDict=recieve_numpy_network(outDict)
 	return outDict
 
-def reward(outDict=[],LAMBDA=100000,DistUp=10000):
+def reward(outDict=[],genSaveFlag=0,step=0,pathDir="",LAMBDA=100000,DistUp=10000):
 	## TODO : FIRST FLASK CALL TAKES SOME TIME 
 	## TODO : EUCD DISTANCE IS NOT ZERO ( for some reason could be stochasticity in glow)
 	## dictionary with the key value wuth corresponding keyname and value 
@@ -75,7 +75,7 @@ def reward(outDict=[],LAMBDA=100000,DistUp=10000):
 	# outDict=recieve_numpy_network(outDict)
 
 	start = time.time()
-	reward = requests.post(urlReward,json={"feature":send_numpy_network(outDict)})
+	reward = requests.post(urlReward,json={"feature":send_numpy_network(outDict),"genSaveFlag":genSaveFlag,"step":step,"pathDir":pathDir})
 	end = time.time()
 	totTime = end-start
 	print(reward.content)
@@ -94,9 +94,9 @@ def reward(outDict=[],LAMBDA=100000,DistUp=10000):
 	# 	return LAMBDA*np.abs(outDict["facenet"][0][1])-outDict["eucd"][0][0]/10.0,outDict["eucd"][0][0],False
 
 	if len(outDict["facenet"][0])==1:
-		return -np.log(outDict["eucd"][0][0])/np.log(10),0.0,0
+		return 0.0,0.0,0.0
 	else:
-		return 100-(np.log(outDict["eucd"][0][0])/np.log(10))/10.0,0.0,0.0
+		return 50,0.0,0.0
 
 
 if __name__ =="__main__":

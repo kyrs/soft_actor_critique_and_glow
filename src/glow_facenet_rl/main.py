@@ -87,8 +87,22 @@ def decoder():
 def reward():
 	data = request.json
 	img_glow_dict = recieve_numpy_network(data["feature"])
+
+	step = data["step"]
+	genSaveFlag = data["genSaveFlag"]
+	pathDir = data["pathDir"]
+	
+	print("in reward",genSaveFlag,step,pathDir)
 	img_glow_emb = glowFetExtMod.flatten_eps_dict(img_glow_dict)
 	newImage = np.array(glowFetExtMod.decode(img_glow_emb)[0])
+
+	############### save Image ##########
+	if genSaveFlag:
+		pathImg = os.path.join(pathDir,str(step)+".jpg")
+		objImg =  Image.fromarray(newImage)
+		objImg.save(pathImg)
+	else:
+		pass
 
 	##### Facenet score value #########
 	dist = faceNetMod.face_compare(np.array(imgObj1),np.array(newImage))

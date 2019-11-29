@@ -31,10 +31,11 @@ dictFormat = {
 
 #---------------defining the POlicy -------------------------
 class Policy(object):
-	def __init__(self,eps_layers=6,conv_size = 1):
+	def __init__(self,eps_layers=6,conv_size = 1,INERTIA =0.5):
 		## total no of layers in a network
 		self.eps_layers = eps_layers 
 		self.finalModel = self.PolicyApprox()
+		self.INERTIA = INERTIA
 
 	# @tf.function
 	def fnApprox(self,layer_specific_mean=[],layer_specific_var=[],input_shape=[],batch_norm=True,dropout=False,drop_ratio=0.5 ):
@@ -62,7 +63,7 @@ class Policy(object):
 			if dropout:
 				meanApprox.add(tf.keras.Dropout(drop_ratio))
 
-			#meanApprox.add(tf.keras.layers.ReLU())
+			meanApprox.add(tf.keras.layers.ReLU())
 
 		meanModelOut = meanApprox(inputLayer)
 
@@ -79,7 +80,7 @@ class Policy(object):
 			if dropout:
 				varApprox.add(tf.keras.Dropout(drop_ratio))
 
-			varApprox.add(tf.keras.layers.RelU())
+			varApprox.add(tf.keras.layers.ReLU())
 
 		varModelOut = varApprox(inputLayer)
 		## defining the output model of the mean vector
@@ -152,13 +153,13 @@ class Policy(object):
 		actionOut,meanOut,sqrtStdOut,gaussOut = self.finalModel(crtInput,training=training)
 		for newVal,meanMat,sqrtStdMat,layerValue,gaussMat,layerName in zip(actionOut,meanOut,sqrtStdOut,crtInput,gaussOut,ordLayProcs):
 			
-			newState["states"][layerName] = layerValue+newVal
+			newState["states"][layerName] = layerValue+ self.INERTIA*newVal
 			action["action"][layerName] = newVal
 			state["states"][layerName] = layerValue
 			mean["mean"][layerName] = meanMat
 			sqrtStd["sqrtStd"][layerName] = sqrtStdMat
 			actionGauss["gauss"][layerName] = gaussMat
-			rewardAction["rewardAction"][layerName] = layerValue + tf.math.tanh(meanMat)
+			rewardAction["rewardAction"][layerName] = layerValue +self.INERTIA*tf.math.tanh(meanMat)
 		
 		return (newState,state,action,mean,sqrtStd,actionGauss,rewardAction)
 
@@ -167,18 +168,25 @@ class Policy(object):
 		logVal = 0.0 
 		for i,name in enumerate(ordLayProcs):
 			mean = meanDict["mean"][name]
-			sqrtStd = sqrtStdDict["sqrtStd"][name]
+			sqrtStd = sqrtStdDict["sqrtStd"][name]+1e-8
 			gauss = actGaussDict["gauss"][name] ## TODO : check the mathematics 
+			################# BIG ISSUE HERE #################
 			val = tfp.distributions.Normal(loc=mean,scale = tf.pow(sqrtStd,2),allow_nan_stats=False).prob(gauss)
 			changeInVar = 1-tf.pow(tf.math.tanh(mean),2)
-			logVal+=(tf.reduce_sum(tf.math.log(val))-tf.reduce_sum(tf.math.log(1e-6+changeInVar)))
+			logVal+=(tf.reduce_sum(tf.math.log(val + 1e-6))-tf.reduce_sum(tf.math.log(1e-6+changeInVar)))
 
-
+			
 			## see appendix of paper for calculating log likelihood
 
-			print (logVal,tf.reduce_sum(tf.math.log(val),),tf.reduce_sum(tf.math.log(changeInVar)))
-			if tf.math.is_nan(logVal):
-				input()
+			# print (logVal,tf.reduce_sum(tf.math.log(val+1e-6),),tf.reduce_sum(tf.math.log(changeInVar+1e-6)))
+			# if tf.math.is_nan(logVal):
+				
+			# 	print("mean",mean)
+			# 	print("gauss",gauss)
+			# 	print("sqrtStd",sqrtStd)
+				
+
+			# 	input()
 		
 		return logVal
 	def policyLearn(self):
